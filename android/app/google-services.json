@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "479566427899",
+    "project_id": "digital-life-app-f82f9",
+    "storage_bucket": "digital-life-app-f82f9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:479566427899:android:a3e4ce7bd890357565225e",
+        "android_client_info": {
+          "package_name": "com.example.digital_life_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkgzyFGhKSHPoThXAVvlfcE7sSTvxUDj0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

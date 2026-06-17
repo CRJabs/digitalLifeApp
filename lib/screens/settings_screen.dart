@@ -185,16 +185,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
-
-              // ── LiFe logo pinned above nav ─────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Image.asset(
-                  'assets/lifeColored.png',
-                  height: 38,
-                  fit: BoxFit.contain,
-                ),
-              ),
             ],
           ),
         );

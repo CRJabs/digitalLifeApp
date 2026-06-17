@@ -39,6 +39,7 @@ dependencies:
   cloud_firestore: ^6.5.0
   http: ^1.2.2
   qr_flutter: ^4.1.0
+  supabase_flutter: ^2.6.0
 
 dev_dependencies:
   flutter_test:

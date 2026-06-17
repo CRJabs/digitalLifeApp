@@ -1,86 +1,80 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
+import '../core/attendee_service.dart';
 import '../core/user_profile_service.dart';
-
-/// Data model for a recent-activity list item.
-class _ActivityItem {
-  const _ActivityItem({required this.eventName, required this.detail});
-  final String eventName;
-  final String detail;
-}
 
 /// Home / main screen (tab 0).
 /// Shows a welcome header, the "View QR Code" action card, and a
-/// Recent Activity list.
-class HomeScreen extends StatelessWidget {
+/// Recent Activity list sourced from live Supabase attendee updates.
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.onViewQrTap});
 
   /// Called when the user taps the "View QR Code" card; used by [MainShell]
   /// to switch to the Scanner tab.
   final VoidCallback? onViewQrTap;
 
-  static const List<_ActivityItem> _activities = [
-    _ActivityItem(
-      eventName: 'Panagdait Fair 2026',
-      detail: 'Attendance timed out',
-    ),
-    _ActivityItem(
-      eventName: 'Panagdait Fair 2026',
-      detail: 'Attendance timed in',
-    ),
-    _ActivityItem(
-      eventName: 'General Orientation 2026',
-      detail: 'Attendance timed out',
-    ),
-    _ActivityItem(
-      eventName: 'General Orientation 2026',
-      detail: 'Attendance timed in',
-    ),
-  ];
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    AttendeeService().addListener(_onAttendeeUpdate);
+    UserProfileService().addListener(_onProfileUpdate);
+  }
+
+  @override
+  void dispose() {
+    AttendeeService().removeListener(_onAttendeeUpdate);
+    UserProfileService().removeListener(_onProfileUpdate);
+    super.dispose();
+  }
+
+  void _onAttendeeUpdate() => setState(() {});
+  void _onProfileUpdate() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    return ListenableBuilder(
-      listenable: UserProfileService(),
-      builder: (context, _) {
-        return Container(
-          color: Colors.white,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header ──────────────────────────────────────────────────────
-              _buildHeader(mq),
+    final profile = UserProfileService();
 
-              // ── Scrollable body ─────────────────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildViewQrCard(),
-                      const SizedBox(height: 28),
-                      _buildSectionHeader(),
-                      const SizedBox(height: 12),
-                      _buildActivityList(),
-                    ],
-                  ),
-                ),
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──────────────────────────────────────────────────────
+          _buildHeader(mq, profile),
+
+          // ── Scrollable body ─────────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildViewQrCard(),
+                  const SizedBox(height: 28),
+                  _buildSectionHeader(),
+                  const SizedBox(height: 12),
+                  _buildActivityList(),
+                ],
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
   // ── Header ───────────────────────────────────────────────────────────────
-  Widget _buildHeader(MediaQueryData mq) {
-    final profile = UserProfileService();
+  Widget _buildHeader(MediaQueryData mq, UserProfileService profile) {
     final parts = profile.name.trim().split(' ');
-    final displayName = parts.length > 1 ? '${parts[0]} ${parts[1]}' : profile.name;
+    final displayName =
+        parts.length > 1 ? '${parts[0]} ${parts[1]}' : profile.name;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, mq.padding.top + 20, 20, 12),
@@ -122,7 +116,7 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: onViewQrTap,
+          onTap: widget.onViewQrTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
             child: Row(
@@ -194,10 +188,34 @@ class HomeScreen extends StatelessWidget {
 
   // ── Activity list ────────────────────────────────────────────────────────
   Widget _buildActivityList() {
+    final items = AttendeeService().recentActivity;
+
+    if (items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(
+                Icons.history_rounded,
+                size: 40,
+                color: AppColors.nocturnalExpedition.withAlpha(60),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No recent activity yet',
+                style: AppTextStyles.activitySubtitle,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Column(
-      children: List.generate(_activities.length, (i) {
-        final item = _activities[i];
-        final isLast = i == _activities.length - 1;
+      children: List.generate(items.length, (i) {
+        final item = items[i];
+        final isLast = i == items.length - 1;
         return Column(
           children: [
             Padding(
@@ -208,11 +226,9 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.eventName,
-                            style: AppTextStyles.activityTitle),
+                        Text(item.eventName, style: AppTextStyles.activityTitle),
                         const SizedBox(height: 2),
-                        Text(item.detail,
-                            style: AppTextStyles.activitySubtitle),
+                        Text(item.detail, style: AppTextStyles.activitySubtitle),
                       ],
                     ),
                   ),
@@ -224,8 +240,7 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
             ),
-            if (!isLast)
-              const Divider(height: 1, color: Color(0xFFEEF0EF)),
+            if (!isLast) const Divider(height: 1, color: Color(0xFFEEF0EF)),
           ],
         );
       }),

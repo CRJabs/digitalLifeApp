@@ -35,11 +35,32 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Show the LiFe logo above the navbar on Activity (2) and Settings (3) tabs.
+    final showLogo = _currentIndex == 2 || _currentIndex == 3;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
           IndexedStack(index: _currentIndex, children: _screens),
+
+          // ── LiFe logo — floats just above the bottom navbar ─────────────
+          if (showLogo)
+            Positioned(
+              left: 0,
+              right: 0,
+              // 32px navbar bottom offset + ~60px nav height + 24px gap
+              bottom: 116,
+              child: IgnorePointer(
+                child: Image.asset(
+                  'assets/lifeColored.png',
+                  height: 38,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+
+          // ── Floating bottom navigation bar ──────────────────────────────
           Positioned(
             left: 0,
             right: 0,

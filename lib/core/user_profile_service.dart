@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../firebase_options.dart';
+import 'attendee_service.dart';
 
 /// Singleton profile service that extends ChangeNotifier to make user data
 /// updates reactive.
@@ -173,6 +174,11 @@ class UserProfileService extends ChangeNotifier {
     }
 
     notifyListeners();
+
+    // Start listening for attendee updates keyed to this user's name.
+    if (name.isNotEmpty) {
+      await AttendeeService().startListening(name);
+    }
   }
 
   /// Writes the current profile fields to Firestore via REST.
@@ -249,6 +255,7 @@ class UserProfileService extends ChangeNotifier {
   /// Clears all fields (called on sign-out).
   void clearProfile() {
     _clearFields();
+    AttendeeService().stopListening();
     notifyListeners();
   }
 

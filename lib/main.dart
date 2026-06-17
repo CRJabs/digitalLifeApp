@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'firebase_options.dart';
 import 'core/app_colors.dart';
 import 'core/app_text_styles.dart';
@@ -11,6 +12,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+  await Supabase.initialize(
+    url: 'https://fsczvbsfhuenrzwxtgyq.supabase.co',
+    publishableKey: 'sb_publishable_PtsfIjaL-mJUC8hBcHd0fw_sDYj6iWU',
   );
   UserProfileService().startHourlyRotation();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);

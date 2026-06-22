@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
+import '../core/app_date_utils.dart';
 import '../core/app_text_styles.dart';
 import '../core/attendee_service.dart';
 import '../core/user_profile_service.dart';
@@ -204,28 +205,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     setState(() => _expanded[category] = !(_expanded[category] ?? false));
   }
 
-  String _formatDate(String rawDate) {
-    try {
-      final parsed = DateTime.parse(rawDate);
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      return '${months[parsed.month - 1]} ${parsed.day.toString().padLeft(2, '0')}, ${parsed.year}';
-    } catch (_) {
-      return rawDate;
-    }
-  }
 
   bool _isEventFinished(SupabaseEvent event) {
     try {
@@ -508,7 +487,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     Text(item.eventName, style: AppTextStyles.activityTitle),
                     const SizedBox(height: 2),
                     Text(
-                      _formatDate(item.date),
+                      AppDateUtils.formatDate(item.date),
                       style: AppTextStyles.activitySubtitle.copyWith(
                         color: AppColors.nocturnalExpedition,
                         fontSize: 11,

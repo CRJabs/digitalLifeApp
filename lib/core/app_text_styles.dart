@@ -76,7 +76,7 @@ class AppTextStyles {
     fontFamily: _fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w400,
-    color: Color(0xFF5A6E77),
+    color: AppColors.subtleGray,
   );
 
   static const TextStyle navLabel = TextStyle(

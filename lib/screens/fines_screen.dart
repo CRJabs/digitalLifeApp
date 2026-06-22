@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../core/app_date_utils.dart';
 import '../core/app_text_styles.dart';
 import '../core/attendee_service.dart';
 
@@ -28,28 +29,6 @@ class _FinesScreenState extends State<FinesScreen> {
 
   void _onServiceUpdate() => setState(() {});
 
-  String _formatDate(String rawDate) {
-    try {
-      final parsed = DateTime.parse(rawDate);
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      return '${months[parsed.month - 1]} ${parsed.day.toString().padLeft(2, '0')}, ${parsed.year}';
-    } catch (_) {
-      return rawDate;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -214,7 +193,7 @@ class _FinesScreenState extends State<FinesScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _formatDate(info.date),
+                      AppDateUtils.formatDate(info.date),
                       style: AppTextStyles.activitySubtitle.copyWith(
                         color: AppColors.nocturnalExpedition,
                         fontSize: 11,

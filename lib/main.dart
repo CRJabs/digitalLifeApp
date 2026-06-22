@@ -41,7 +41,7 @@ class LifeApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.nocturnalExpedition,
           primary: AppColors.nocturnalExpedition,
-          secondary: AppColors.forsythia,
+          secondary: AppColors.nocturnalExpedition,
           surface: AppColors.surface,
         ),
         scaffoldBackgroundColor: Colors.white,

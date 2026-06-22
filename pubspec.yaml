@@ -1,5 +1,5 @@
 name: digital_life_app
-description: "A new Flutter project."
+description: "LiFe — Log of Informative and Fun-Filled Experiences. A student activity attendance and QR check-in app for University of Baguio."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -33,10 +33,9 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  # cupertino_icons: ^1.0.8  # Unused — app uses Material icons throughout
   firebase_core: ^4.10.0
   firebase_auth: ^6.5.2
-  cloud_firestore: ^6.5.0
   http: ^1.2.2
   qr_flutter: ^4.1.0
   supabase_flutter: ^2.6.0
@@ -76,11 +75,6 @@ flutter:
   # https://flutter.dev/to/asset-from-package
 
   fonts:
-    - family: HostGrotesk
-      fonts:
-        - asset: assets/HostGrotesk-VariableFont_wght.ttf
-        - asset: assets/HostGrotesk-Italic-VariableFont_wght.ttf
-          style: italic
     - family: Figtree
       fonts:
         - asset: assets/Figtree-VariableFont_wght.ttf

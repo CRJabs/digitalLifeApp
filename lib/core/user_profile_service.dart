@@ -29,7 +29,7 @@ class UserProfileService extends ChangeNotifier {
   String program = '';
   String yearLevel = '';
 
-  Timer? _hourlyTimer;
+  Timer? _rotationTimer;
 
   // ── Firestore REST API constants ──────────────────────────────────────────
   static const String _projectId = 'digital-life-app-f82f9';
@@ -49,6 +49,14 @@ class UserProfileService extends ChangeNotifier {
       } else if (Platform.isMacOS || Platform.isLinux) {
         final home = Platform.environment['HOME'] ?? '.';
         path = '$home/.digital_life_app';
+      } else if (Platform.isAndroid) {
+        // On Android, the working directory is the app's private data dir.
+        // Fall back to relative path — it resolves inside the app sandbox.
+        path = '.';
+      } else if (Platform.isIOS) {
+        // Use the iOS Documents directory accessible to the sandbox.
+        final homeDir = Platform.environment['HOME'] ?? '.';
+        path = '$homeDir/Documents';
       } else {
         path = '.';
       }
@@ -271,15 +279,15 @@ class UserProfileService extends ChangeNotifier {
   /// Starts a periodic check to detect day changes and notifies listeners
   /// to update the QR code.
   void startDailyRotation() {
-    _hourlyTimer?.cancel();
-    _hourlyTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _rotationTimer?.cancel();
+    _rotationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       notifyListeners();
     });
   }
 
   @override
   void dispose() {
-    _hourlyTimer?.cancel();
+    _rotationTimer?.cancel();
     super.dispose();
   }
 

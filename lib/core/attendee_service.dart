@@ -346,72 +346,76 @@ class AttendeeService extends ChangeNotifier {
   }
 
   void _handleChange(PostgresChangePayload payload) async {
-    final newRow = payload.newRecord;
-    if (newRow.isEmpty) return;
-
-    final record = AttendeeRecord.fromJson(newRow);
-    if (record.eventId.isEmpty) return;
-
-    // Fetch event name for the activity label
-    String eventName = 'Unknown Event';
     try {
-      final eventData = await Supabase.instance.client
-          .from('events')
-          .select('eventName')
-          .eq('id', record.eventId)
-          .maybeSingle();
-      if (eventData != null) {
-        eventName = eventData['eventName'] as String? ?? 'Unknown Event';
+      final newRow = payload.newRecord;
+      if (newRow.isEmpty) return;
+
+      final record = AttendeeRecord.fromJson(newRow);
+      if (record.eventId.isEmpty) return;
+
+      // Fetch event name for the activity label
+      String eventName = 'Unknown Event';
+      try {
+        final eventData = await Supabase.instance.client
+            .from('events')
+            .select('eventName')
+            .eq('id', record.eventId)
+            .maybeSingle();
+        if (eventData != null) {
+          eventName = eventData['eventName'] as String? ?? 'Unknown Event';
+        }
+      } catch (_) {}
+
+      // Determine what changed compared to the previous record
+      final previous = attendeesByEvent[record.eventId];
+      final newItems = <RecentActivityItem>[];
+
+      if (_didFlipTrue(previous?.morningIn, record.morningIn)) {
+        newItems.add(RecentActivityItem(
+          eventName: eventName,
+          detail: 'Morning Attendance Checked In',
+          timestamp: DateTime.now(),
+        ));
       }
-    } catch (_) {}
+      if (_didFlipTrue(previous?.morningOut, record.morningOut)) {
+        newItems.add(RecentActivityItem(
+          eventName: eventName,
+          detail: 'Morning Attendance Checked Out',
+          timestamp: DateTime.now(),
+        ));
+      }
+      if (_didFlipTrue(previous?.afternoonIn, record.afternoonIn)) {
+        newItems.add(RecentActivityItem(
+          eventName: eventName,
+          detail: 'Afternoon Attendance Checked In',
+          timestamp: DateTime.now(),
+        ));
+      }
+      if (_didFlipTrue(previous?.afternoonOut, record.afternoonOut)) {
+        newItems.add(RecentActivityItem(
+          eventName: eventName,
+          detail: 'Afternoon Attendance Checked Out',
+          timestamp: DateTime.now(),
+        ));
+      }
 
-    // Determine what changed compared to the previous record
-    final previous = attendeesByEvent[record.eventId];
-    final newItems = <RecentActivityItem>[];
+      // Update stored record
+      attendeesByEvent[record.eventId] = record;
 
-    if (_didFlipTrue(previous?.morningIn, record.morningIn)) {
-      newItems.add(RecentActivityItem(
-        eventName: eventName,
-        detail: 'Morning Attendance Checked In',
-        timestamp: DateTime.now(),
-      ));
-    }
-    if (_didFlipTrue(previous?.morningOut, record.morningOut)) {
-      newItems.add(RecentActivityItem(
-        eventName: eventName,
-        detail: 'Morning Attendance Checked Out',
-        timestamp: DateTime.now(),
-      ));
-    }
-    if (_didFlipTrue(previous?.afternoonIn, record.afternoonIn)) {
-      newItems.add(RecentActivityItem(
-        eventName: eventName,
-        detail: 'Afternoon Attendance Checked In',
-        timestamp: DateTime.now(),
-      ));
-    }
-    if (_didFlipTrue(previous?.afternoonOut, record.afternoonOut)) {
-      newItems.add(RecentActivityItem(
-        eventName: eventName,
-        detail: 'Afternoon Attendance Checked Out',
-        timestamp: DateTime.now(),
-      ));
-    }
+      // Prepend new activity items
+      for (final item in newItems.reversed) {
+        recentActivity.insert(0, item);
+      }
+      if (recentActivity.length > _maxRecentItems) {
+        recentActivity.removeRange(_maxRecentItems, recentActivity.length);
+      }
 
-    // Update stored record
-    attendeesByEvent[record.eventId] = record;
-
-    // Prepend new activity items
-    for (final item in newItems.reversed) {
-      recentActivity.insert(0, item);
+      notifyListeners();
+      dev.log('AttendeeService — change handled for eventId: ${record.eventId}');
+      await calculateAndSyncDues();
+    } catch (e) {
+      dev.log('AttendeeService — _handleChange error: $e');
     }
-    if (recentActivity.length > _maxRecentItems) {
-      recentActivity.removeRange(_maxRecentItems, recentActivity.length);
-    }
-
-    notifyListeners();
-    dev.log('AttendeeService — change handled for eventId: ${record.eventId}');
-    await calculateAndSyncDues();
   }
 
   bool _didFlipTrue(bool? oldVal, bool newVal) {

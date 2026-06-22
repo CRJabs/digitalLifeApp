@@ -17,7 +17,7 @@ void main() async {
     url: 'https://fsczvbsfhuenrzwxtgyq.supabase.co',
     publishableKey: 'sb_publishable_PtsfIjaL-mJUC8hBcHd0fw_sDYj6iWU',
   );
-  UserProfileService().startHourlyRotation();
+  UserProfileService().startDailyRotation();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -37,7 +37,7 @@ class LifeApp extends StatelessWidget {
       title: 'LiFe – Log of Informative and Fun-Filled Experiences',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        fontFamily: 'HostGrotesk',
+        fontFamily: 'Figtree',
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.nocturnalExpedition,
           primary: AppColors.nocturnalExpedition,

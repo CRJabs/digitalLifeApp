@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/attendee_service.dart';
@@ -8,26 +10,57 @@ import '../core/user_profile_service.dart';
 /// Shows a welcome header, the "View QR Code" action card, and a
 /// Recent Activity list sourced from live Supabase attendee updates.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.onViewQrTap});
+  const HomeScreen({super.key, this.onViewQrTap, this.onSeeAllTap});
 
   /// Called when the user taps the "View QR Code" card; used by [MainShell]
   /// to switch to the Scanner tab.
   final VoidCallback? onViewQrTap;
+
+  /// Called when the user taps "See all" on Recent Activity.
+  final VoidCallback? onSeeAllTap;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late final PageController _carouselController;
+  Timer? _carouselTimer;
+  int _carouselPage = 0;
+  List<Map<String, String>> _dbCarouselItems = [];
+
+  final List<Map<String, String>> _placeholderCarouselItems = [
+    {
+      'title': 'Sports Fest 2026',
+      'desc': 'UBDays Sports Fest starts Wednesday! Settle your dues to receive your gate entry pass.'
+    },
+    {
+      'title': 'Midterm Examinations',
+      'desc': 'Midterms are scheduled for July 6-10. Double check your missing attendance check-ins.'
+    },
+    {
+      'title': 'App Feedback',
+      'desc': 'We want to hear from you! Share your thoughts about the new LiFe app in our online survey.'
+    },
+  ];
+
+  List<Map<String, String>> get _activeCarouselItems =>
+      _dbCarouselItems.isNotEmpty ? _dbCarouselItems : _placeholderCarouselItems;
+
   @override
   void initState() {
     super.initState();
     AttendeeService().addListener(_onAttendeeUpdate);
     UserProfileService().addListener(_onProfileUpdate);
+    _carouselController = PageController(initialPage: 0);
+    _fetchCarouselItems();
+    _startCarouselTimer();
   }
 
   @override
   void dispose() {
+    _carouselTimer?.cancel();
+    _carouselController.dispose();
     AttendeeService().removeListener(_onAttendeeUpdate);
     UserProfileService().removeListener(_onProfileUpdate);
     super.dispose();
@@ -36,6 +69,43 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onAttendeeUpdate() => setState(() {});
   void _onProfileUpdate() => setState(() {});
 
+  Future<void> _fetchCarouselItems() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('carousel_items')
+          .select()
+          .order('created_at', ascending: false);
+      if (data.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _dbCarouselItems = data.map((item) {
+            return {
+              'title': item['title'] as String? ?? '',
+              'desc': item['description'] as String? ?? '',
+            };
+          }).toList();
+        });
+      }
+    } catch (_) {
+      // Gracefully fall back to local placeholders on network/db error
+    }
+  }
+
+  void _startCarouselTimer() {
+    _carouselTimer?.cancel();
+    _carouselTimer = Timer.periodic(const Duration(seconds: 6), (timer) {
+      if (!mounted) return;
+      final items = _activeCarouselItems;
+      if (items.isEmpty) return;
+      _carouselPage = (_carouselPage + 1) % items.length;
+      _carouselController.animateToPage(
+        _carouselPage,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
@@ -43,29 +113,169 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Container(
       color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          // ── Header ──────────────────────────────────────────────────────
-          _buildHeader(mq, profile),
+          // ── Main scrollable body ─────────────────────────────────────────
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──────────────────────────────────────────────────────
+              _buildHeader(mq, profile),
 
-          // ── Scrollable body ─────────────────────────────────────────────
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildViewQrCard(),
-                  const SizedBox(height: 28),
-                  _buildSectionHeader(),
-                  const SizedBox(height: 12),
-                  _buildActivityList(),
-                ],
+              // ── Scrollable body ─────────────────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 240), // Large bottom padding to scroll past floating carousel + navbar
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildOutstandingDuesCard(),
+                      _buildViewQrCard(),
+                      const SizedBox(height: 28),
+                      _buildSectionHeader(),
+                      const SizedBox(height: 12),
+                      _buildActivityList(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // ── Fade background for navbar + carousel backing ───────────────
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 260,
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.white,
+                      Colors.white,
+                      Colors.white.withAlpha(200),
+                      Colors.white.withAlpha(0),
+                    ],
+                    stops: const [0.0, 0.8, 0.9, 1.0],
+                  ),
+                ),
               ),
             ),
           ),
+
+          // ── Floating carousel above navbar ───────────────────────────────
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 120,
+            child: _buildFloatingCarousel(),
+          ),
         ],
+      ),
+    );
+  }
+
+  // ── Outstanding Dues card ────────────────────────────────────────────────
+  Widget _buildOutstandingDuesCard() {
+    final dues = AttendeeService().outstandingDues;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.mysticMint, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.oceanicNoir.withAlpha(20),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.payments_rounded,
+                color: AppColors.oceanicNoir,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Outstanding Fines',
+                    style: TextStyle(
+                      fontFamily: 'Figtree',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF5A6E77),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '₱${dues.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontFamily: 'Figtree',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.oceanicNoir,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (dues > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Pending',
+                  style: TextStyle(
+                    fontFamily: 'Figtree',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Cleared',
+                  style: TextStyle(
+                    fontFamily: 'Figtree',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.green.shade700,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -143,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         'View QR Code',
                         style: TextStyle(
-                          fontFamily: 'HostGrotesk',
+                          fontFamily: 'Figtree',
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
@@ -153,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         'Check your attendance',
                         style: TextStyle(
-                          fontFamily: 'HostGrotesk',
+                          fontFamily: 'Figtree',
                           fontSize: 12,
                           fontWeight: FontWeight.w400,
                           color: Color(0xFFAEC8CC),
@@ -181,8 +391,133 @@ class _HomeScreenState extends State<HomeScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text('Recent Activity', style: AppTextStyles.sectionTitle),
-        Text('See all', style: AppTextStyles.seeAll),
+        GestureDetector(
+          onTap: widget.onSeeAllTap,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Text('See all', style: AppTextStyles.seeAll),
+          ),
+        ),
       ],
+    );
+  }
+
+  // ── Floating Carousel ────────────────────────────────────────────────────
+  Widget _buildFloatingCarousel() {
+    final items = _activeCarouselItems;
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 80,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(240),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.mysticMint, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            // Content
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 50, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.nocturnalExpedition.withAlpha(20),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.campaign_rounded,
+                      color: AppColors.nocturnalExpedition,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _carouselController,
+                      itemCount: items.length,
+                      onPageChanged: (page) {
+                        setState(() {
+                          _carouselPage = page;
+                        });
+                      },
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              item['title'] ?? '',
+                              style: const TextStyle(
+                                fontFamily: 'Figtree',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.oceanicNoir,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item['desc'] ?? '',
+                              style: const TextStyle(
+                                fontFamily: 'Figtree',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Page indicators in the top right
+            Positioned(
+              top: 10,
+              right: 12,
+              child: Row(
+                children: List.generate(items.length, (index) {
+                  final isSelected = _carouselPage == index;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.only(left: 3),
+                    width: isSelected ? 12 : 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.nocturnalExpedition
+                          : AppColors.mysticMint,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

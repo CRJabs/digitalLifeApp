@@ -17,7 +17,8 @@ class AppBottomNav extends StatelessWidget {
 
   static const _items = <_NavItem>[
     _NavItem(icon: Icons.home_rounded, label: 'Home'),
-    _NavItem(icon: Icons.camera_alt_outlined, label: 'Scan'),
+    _NavItem(icon: Icons.payments_rounded, label: 'Fines'),
+    _NavItem(icon: Icons.qr_code_2_rounded, label: 'Code'),
     _NavItem(icon: Icons.notifications_rounded, label: 'Activity'),
     _NavItem(icon: Icons.tune_rounded, label: 'Settings'),
   ];
@@ -61,7 +62,7 @@ class AppBottomNav extends StatelessWidget {
                   children: [
                     Icon(
                       item.icon,
-                      size: 20,
+                      size: 26,
                       color: isSelected
                           ? AppColors.oceanicNoir
                           : Colors.white.withAlpha(140),

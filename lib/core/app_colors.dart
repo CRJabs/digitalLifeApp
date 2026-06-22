@@ -12,12 +12,12 @@ class AppColors {
   AppColors._();
 
   // ── Primary Brand ──────────────────────────────────────────────────────────
-  static const Color nocturnalExpedition = Color(0xFF114C5A);
-  static const Color oceanicNoir = Color(0xFF172B36);
+  static const Color nocturnalExpedition = Color(0xFF1900C4); // Vibrant Blue
+  static const Color oceanicNoir = Color(0xFF0C0062);          // Deep Blue
 
   // ── Accent ─────────────────────────────────────────────────────────────────
-  static const Color forsythia = Color(0xFFFFC801);
-  static const Color deepSaffron = Color(0xFFFF9932);
+  static const Color forsythia = Color(0xFF1900C4);
+  static const Color deepSaffron = Color(0xFF0C0062);
 
   // ── Neutral ────────────────────────────────────────────────────────────────
   static const Color arcticPowder = Color(0xFFF1F6F4);
@@ -26,7 +26,7 @@ class AppColors {
   // ── Semantic aliases ───────────────────────────────────────────────────────
   static const Color background = arcticPowder;
   static const Color surface = Colors.white;
-  static const Color primaryDark = nocturnalExpedition;
+  static const Color primaryDark = oceanicNoir;
   static const Color accentYellow = forsythia;
   static const Color accentOrange = deepSaffron;
 
@@ -34,11 +34,9 @@ class AppColors {
   static const LinearGradient splashGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    stops: [0.0, 0.55, 1.0],
     colors: [
       oceanicNoir,
       nocturnalExpedition,
-      forsythia,
     ],
   );
 }

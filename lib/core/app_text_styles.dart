@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'app_colors.dart';
 
-/// Shared text styles using the Host Grotesk variable font.
+/// Shared text styles using the Figtree font.
 class AppTextStyles {
   AppTextStyles._();
 
-  static const String _fontFamily = 'HostGrotesk';
+  static const String _fontFamily = 'Figtree';
 
   static const TextStyle splashTagline = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: FontWeight.w500,
     color: Colors.white,
     letterSpacing: 2.4,
@@ -16,21 +17,21 @@ class AppTextStyles {
 
   static const TextStyle loginTitle = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: FontWeight.w600,
-    color: Color(0xFF172B36),
+    color: AppColors.oceanicNoir,
   );
 
   static const TextStyle inputHint = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: FontWeight.w400,
-    color: Color(0xFF114C5A),
+    color: AppColors.nocturnalExpedition,
   );
 
   static const TextStyle button = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: FontWeight.w600,
     color: Colors.white,
     letterSpacing: 0.4,
@@ -40,35 +41,35 @@ class AppTextStyles {
     fontFamily: _fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w400,
-    color: Color(0xFF172B36),
+    color: AppColors.oceanicNoir,
   );
 
   static const TextStyle welcomeName = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: FontWeight.w700,
-    color: Color(0xFF172B36),
+    color: AppColors.oceanicNoir,
   );
 
   static const TextStyle sectionTitle = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: FontWeight.w700,
-    color: Color(0xFF172B36),
+    color: AppColors.oceanicNoir,
   );
 
   static const TextStyle seeAll = TextStyle(
     fontFamily: _fontFamily,
     fontSize: 13,
     fontWeight: FontWeight.w500,
-    color: Color(0xFF114C5A),
+    color: AppColors.nocturnalExpedition,
   );
 
   static const TextStyle activityTitle = TextStyle(
     fontFamily: _fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w600,
-    color: Color(0xFF172B36),
+    color: AppColors.oceanicNoir,
   );
 
   static const TextStyle activitySubtitle = TextStyle(
@@ -80,7 +81,7 @@ class AppTextStyles {
 
   static const TextStyle navLabel = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: FontWeight.w500,
   );
 }

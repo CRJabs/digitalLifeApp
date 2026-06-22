@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_bottom_nav.dart';
 import 'home_screen.dart';
+import 'fines_screen.dart';
 import 'scanner_screen.dart';
 import 'activity_screen.dart';
 import 'settings_screen.dart';
 
-/// Root shell for the four main tabs.
+/// Root shell for the five main tabs.
 /// Uses an [IndexedStack] to keep all screens alive while preserving state.
 class MainShell extends StatefulWidget {
   const MainShell({super.key, this.initialIndex = 0});
@@ -18,44 +19,55 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   late int _currentIndex;
-  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _screens = [
-      // HomeScreen gets a callback so the "View QR Code" card can jump to tab 1
-      HomeScreen(onViewQrTap: () => setState(() => _currentIndex = 1)),
-      const ScannerScreen(),
-      const ActivityScreen(),
-      const SettingsScreen(),
-    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    // Show the LiFe logo above the navbar on Activity (2) and Settings (3) tabs.
-    final showLogo = _currentIndex == 2 || _currentIndex == 3;
+    final screens = [
+      // HomeScreen gets a callback so the "View QR Code" card can jump to tab 2 (Scan)
+      HomeScreen(
+        onViewQrTap: () => setState(() => _currentIndex = 2),
+        onSeeAllTap: () => setState(() => _currentIndex = 3),
+      ),
+      const FinesScreen(),
+      const ScannerScreen(),
+      ActivityScreen(isActive: _currentIndex == 3),
+      const SettingsScreen(),
+    ];
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          IndexedStack(index: _currentIndex, children: _screens),
+          IndexedStack(index: _currentIndex, children: screens),
 
-          // ── LiFe logo — floats just above the bottom navbar ─────────────
-          if (showLogo)
+          // ── Fade background for navbar ──────────────────────────────────
+          if (_currentIndex != 0 && _currentIndex != 2)
             Positioned(
               left: 0,
               right: 0,
-              // 32px navbar bottom offset + ~60px nav height + 24px gap
-              bottom: 116,
+              bottom: 0,
+              height: 150,
               child: IgnorePointer(
-                child: Image.asset(
-                  'assets/lifeColored.png',
-                  height: 38,
-                  fit: BoxFit.contain,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.white,
+                        Colors.white,
+                        Colors.white.withAlpha(200),
+                        Colors.white.withAlpha(0),
+                      ],
+                      stops: const [0.0, 0.75, 0.9, 1.0],
+                    ),
+                  ),
                 ),
               ),
             ),

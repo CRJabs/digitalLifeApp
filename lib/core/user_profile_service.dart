@@ -268,9 +268,9 @@ class UserProfileService extends ChangeNotifier {
     yearLevel = '';
   }
 
-  /// Starts a periodic check to detect hour changes and notifies listeners
+  /// Starts a periodic check to detect day changes and notifies listeners
   /// to update the QR code.
-  void startHourlyRotation() {
+  void startDailyRotation() {
     _hourlyTimer?.cancel();
     _hourlyTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       notifyListeners();
@@ -283,12 +283,12 @@ class UserProfileService extends ChangeNotifier {
     super.dispose();
   }
 
-  /// Encodes profile details along with an hourly expiration timestamp into
+  /// Encodes profile details along with a daily expiration timestamp into
   /// JSON for the QR code.
   String toQrData() {
     final now = DateTime.now();
-    final hourTimestamp =
-        DateTime(now.year, now.month, now.day, now.hour).millisecondsSinceEpoch;
+    final dayTimestamp =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
     return jsonEncode({
       'name': name,
       'email': email,
@@ -296,7 +296,7 @@ class UserProfileService extends ChangeNotifier {
       'dept': department,
       'program': program,
       'year': yearLevel,
-      'expiresAt': hourTimestamp,
+      'expiresAt': dayTimestamp,
     });
   }
 }

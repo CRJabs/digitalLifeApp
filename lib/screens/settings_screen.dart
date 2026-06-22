@@ -18,12 +18,30 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isEditing = false;
 
+  static const _validDepartments = {
+    'CAHS',
+    'CASE',
+    'CBA',
+    'CCJ',
+    'CETAFA',
+    'CHMTN',
+    'COL',
+    'COM',
+    'COP',
+    'CPTOT',
+    'GSPS',
+    'UBGS',
+    'UBJHS',
+    'VDTJHS',
+    'VDTSHS',
+  };
+
   late final TextEditingController _nameCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _phoneCtrl;
-  late final TextEditingController _deptCtrl;
   late final TextEditingController _programCtrl;
   late final TextEditingController _yearCtrl;
+  String? _selectedDept;
 
   @override
   void initState() {
@@ -32,9 +50,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _nameCtrl = TextEditingController(text: profile.name);
     _emailCtrl = TextEditingController(text: profile.email);
     _phoneCtrl = TextEditingController(text: profile.phone);
-    _deptCtrl = TextEditingController(text: profile.department);
     _programCtrl = TextEditingController(text: profile.program);
     _yearCtrl = TextEditingController(text: profile.yearLevel);
+
+    final profileDept = profile.department.trim().toUpperCase();
+    if (_validDepartments.contains(profileDept)) {
+      _selectedDept = profileDept;
+    } else {
+      _selectedDept = _validDepartments.first;
+    }
   }
 
   @override
@@ -42,7 +66,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
-    _deptCtrl.dispose();
     _programCtrl.dispose();
     _yearCtrl.dispose();
     super.dispose();
@@ -58,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       newName: _nameCtrl.text.trim(),
       newEmail: _emailCtrl.text.trim(),
       newPhone: _phoneCtrl.text.trim(),
-      newDept: _deptCtrl.text.trim(),
+      newDept: _selectedDept ?? 'CAHS',
       newProgram: _programCtrl.text.trim(),
       newYearLevel: _yearCtrl.text.trim(),
     );
@@ -88,22 +111,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return Container(
           color: Colors.white,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: mq.padding.top),
-
-              // ── Page title ──────────────────────────────────────────────────
+              // ── Header ──────────────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text(
-                  'User Profile',
-                  style: AppTextStyles.welcomeName.copyWith(fontSize: 18),
+                padding: EdgeInsets.fromLTRB(20, mq.padding.top + 20, 20, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Account Settings', style: AppTextStyles.welcomeLabel),
+                          const SizedBox(height: 2),
+                          Text('User Profile', style: AppTextStyles.welcomeName),
+                        ],
+                      ),
+                    ),
+                    Image.asset('assets/lifeColored.png', height: 38, fit: BoxFit.contain),
+                  ],
                 ),
               ),
 
               // ── Scrollable body ─────────────────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -121,7 +155,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildLabeledField('Phone Number', _phoneCtrl,
                             keyboardType: TextInputType.phone),
                         const SizedBox(height: 14),
-                        _buildLabeledField('Department', _deptCtrl),
+                        _buildDropdownField(
+                          'Department',
+                          _selectedDept,
+                          (val) => setState(() => _selectedDept = val),
+                        ),
                         const SizedBox(height: 14),
                         Row(
                           children: [
@@ -171,7 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: const Text(
                             'Sign Out',
                             style: TextStyle(
-                              fontFamily: 'HostGrotesk',
+                              fontFamily: 'Figtree',
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: Colors.red,
@@ -206,12 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // Avatar — UB circular logo
           ClipOval(
-            child: Image.asset(
-              'assets/ubcso.png',
-              width: 62,
-              height: 62,
-              fit: BoxFit.cover,
-            ),
+            child: _buildAvatar(profile.department),
           ),
           const SizedBox(width: 14),
 
@@ -299,6 +332,107 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDropdownField(
+    String label,
+    String? currentValue,
+    ValueChanged<String?> onChanged,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.inputHint.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: currentValue,
+          items: _validDepartments.map((dept) {
+            return DropdownMenuItem<String>(
+              value: dept,
+              child: Text(
+                dept,
+                style: AppTextStyles.inputHint.copyWith(color: AppColors.oceanicNoir),
+              ),
+            );
+          }).toList(),
+          onChanged: onChanged,
+          style: AppTextStyles.inputHint.copyWith(color: AppColors.oceanicNoir),
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.mysticMint),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.mysticMint),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: AppColors.nocturnalExpedition,
+                width: 1.5,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAvatar(String dept) {
+    final cleanDept = dept.trim().toUpperCase();
+    if (_validDepartments.contains(cleanDept)) {
+      final url = 'https://fsczvbsfhuenrzwxtgyq.supabase.co/storage/v1/object/public/department-logos/${cleanDept.toLowerCase()}.png';
+      return Image.network(
+        url,
+        width: 62,
+        height: 62,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Image.asset(
+            'assets/ubcso.png',
+            width: 62,
+            height: 62,
+            fit: BoxFit.cover,
+          );
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return SizedBox(
+            width: 62,
+            height: 62,
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.oceanicNoir,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+    return Image.asset(
+      'assets/ubcso.png',
+      width: 62,
+      height: 62,
+      fit: BoxFit.cover,
     );
   }
 }

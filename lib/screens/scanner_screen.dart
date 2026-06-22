@@ -95,7 +95,7 @@ class ScannerScreen extends StatelessWidget {
                               Text(
                                 profile.name,
                                 style: const TextStyle(
-                                  fontFamily: 'HostGrotesk',
+                                  fontFamily: 'Figtree',
                                   fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
@@ -106,7 +106,7 @@ class ScannerScreen extends StatelessWidget {
                               Text(
                                 '${profile.department}  |  ${profile.program} - ${profile.yearLevel}',
                                 style: TextStyle(
-                                  fontFamily: 'HostGrotesk',
+                                  fontFamily: 'Figtree',
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                   color: Colors.white.withAlpha(200),
@@ -120,9 +120,9 @@ class ScannerScreen extends StatelessWidget {
 
                         // ── Notice text ───────────────────────────────────
                         Text(
-                          'Note: The generated QR code is temporary and will change after an hour.',
+                          'Note: The generated QR code is temporary and will change after 24 hours.',
                           style: TextStyle(
-                            fontFamily: 'HostGrotesk',
+                            fontFamily: 'Figtree',
                             fontSize: 12,
                             color: Colors.white.withAlpha(180),
                             fontStyle: FontStyle.italic,

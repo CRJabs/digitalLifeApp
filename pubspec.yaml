@@ -81,3 +81,8 @@ flutter:
         - asset: assets/HostGrotesk-VariableFont_wght.ttf
         - asset: assets/HostGrotesk-Italic-VariableFont_wght.ttf
           style: italic
+    - family: Figtree
+      fonts:
+        - asset: assets/Figtree-VariableFont_wght.ttf
+        - asset: assets/Figtree-Italic-VariableFont_wght.ttf
+          style: italic

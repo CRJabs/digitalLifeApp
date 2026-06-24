@@ -4,6 +4,7 @@ import '../core/app_colors.dart';
 import '../core/user_profile_service.dart';
 import 'login_screen.dart';
 import 'main_shell.dart';
+import 'registration_screen.dart';
 
 /// Listens to Firebase Auth state changes and routes the user accordingly:
 ///   - No session  →  [LoginScreen]
@@ -39,11 +40,20 @@ class AuthGate extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // Authenticated session found — load the profile then show the shell.
-        return FutureBuilder<void>(
-          future: UserProfileService().loadFromFirestore(user.uid),
-          builder: (context, profileSnap) {
-            if (profileSnap.connectionState != ConnectionState.done) {
+        // Authenticated session found — load the profile then route.
+        return FutureBuilder<bool>(
+          future: () async {
+            final isExpired = await UserProfileService().isSessionExpired(user.uid);
+            if (isExpired) {
+              await FirebaseAuth.instance.signOut();
+              UserProfileService().clearProfile();
+              return false;
+            }
+            await UserProfileService().loadFromFirestore(user.uid);
+            return await UserProfileService().checkIsFirstLogin(user.uid);
+          }(),
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
               return const Scaffold(
                 backgroundColor: Colors.transparent,
                 body: DecoratedBox(
@@ -55,7 +65,10 @@ class AuthGate extends StatelessWidget {
                 ),
               );
             }
-            return const MainShell();
+            final isFirst = snap.data ?? false;
+            return isFirst
+                ? RegistrationScreen(email: user.email ?? '')
+                : const MainShell();
           },
         );
       },

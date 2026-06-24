@@ -19,46 +19,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isEditing = false;
 
   static const _validDepartments = {
-    'CAHS',
-    'CASE',
-    'CBA',
-    'CCJ',
-    'CETAFA',
-    'CHMTN',
-    'COL',
-    'COM',
-    'COP',
-    'CPTOT',
-    'GSPS',
-    'UBGS',
-    'UBJHS',
-    'VDTJHS',
-    'VDTSHS',
+    'CAHS', 'CASE', 'CBA', 'CCJ', 'CETAFA',
+    'CHMTN', 'COL', 'COM', 'COP', 'CPTOT',
+    'GSPS', 'UBGS', 'UBJHS', 'VDTJHS', 'VDTSHS',
   };
+
+  static const _yearLevels = [
+    '1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year',
+  ];
 
   late final TextEditingController _nameCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _programCtrl;
-  late final TextEditingController _yearCtrl;
   String? _selectedDept;
+  String? _selectedYear;
 
   @override
   void initState() {
     super.initState();
     final profile = UserProfileService();
-    _nameCtrl = TextEditingController(text: profile.name);
-    _emailCtrl = TextEditingController(text: profile.email);
-    _phoneCtrl = TextEditingController(text: profile.phone);
+    _nameCtrl    = TextEditingController(text: profile.name);
+    _emailCtrl   = TextEditingController(text: profile.email);
+    _phoneCtrl   = TextEditingController(text: profile.phone);
     _programCtrl = TextEditingController(text: profile.program);
-    _yearCtrl = TextEditingController(text: profile.yearLevel);
 
     final profileDept = profile.department.trim().toUpperCase();
-    if (_validDepartments.contains(profileDept)) {
-      _selectedDept = profileDept;
-    } else {
-      _selectedDept = _validDepartments.first;
-    }
+    _selectedDept = _validDepartments.contains(profileDept)
+        ? profileDept
+        : _validDepartments.first;
+
+    // Match stored year level to dropdown values (case-insensitive)
+    final storedYear = profile.yearLevel.trim();
+    _selectedYear = _yearLevels.contains(storedYear) ? storedYear : null;
   }
 
   @override
@@ -67,7 +60,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _programCtrl.dispose();
-    _yearCtrl.dispose();
     super.dispose();
   }
 
@@ -76,6 +68,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveChanges() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
+    if (_selectedYear == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a year level.')),
+      );
+      return;
+    }
     await UserProfileService().updateProfile(
       uid: uid,
       newName: _nameCtrl.text.trim(),
@@ -83,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       newPhone: _phoneCtrl.text.trim(),
       newDept: _selectedDept ?? 'CAHS',
       newProgram: _programCtrl.text.trim(),
-      newYearLevel: _yearCtrl.text.trim(),
+      newYearLevel: _selectedYear!,
     );
     if (!mounted) return;
     setState(() => _isEditing = false);
@@ -168,6 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildDropdownField(
                           'Department',
                           _selectedDept,
+                          null, // uses _validDepartments by default
                           (val) => setState(() => _selectedDept = val),
                         ),
                         const SizedBox(height: 14),
@@ -178,8 +177,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(width: 14),
                             Expanded(
-                              child: _buildLabeledField('Year Level', _yearCtrl,
-                                  keyboardType: TextInputType.number),
+                              child: _buildDropdownField(
+                                'Year Level',
+                                _selectedYear,
+                                const ['1st Year','2nd Year','3rd Year','4th Year','5th Year'],
+                                (val) => setState(() => _selectedYear = val),
+                              ),
                             ),
                           ],
                         ),
@@ -348,8 +351,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildDropdownField(
     String label,
     String? currentValue,
+    List<String>? items,
     ValueChanged<String?> onChanged,
   ) {
+    final options = items ?? _validDepartments.toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -363,12 +368,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           initialValue: currentValue,
-          items: _validDepartments.map((dept) {
+          isExpanded: true,
+          items: options.map((opt) {
             return DropdownMenuItem<String>(
-              value: dept,
+              value: opt,
               child: Text(
-                dept,
+                opt,
                 style: AppTextStyles.inputHint.copyWith(color: AppColors.oceanicNoir),
+                overflow: TextOverflow.ellipsis,
               ),
             );
           }).toList(),
@@ -401,6 +408,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
+
 
   Widget _buildAvatar(String dept) {
     final cleanDept = dept.trim().toUpperCase();

@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../firebase_options.dart';
 import 'attendee_service.dart';
 
@@ -183,9 +184,9 @@ class UserProfileService extends ChangeNotifier {
 
     notifyListeners();
 
-    // Start listening for attendee updates keyed to this user's name.
-    if (name.isNotEmpty) {
-      await AttendeeService().startListening(name);
+    // Start listening for attendee updates keyed to this user's email.
+    if (email.isNotEmpty) {
+      await AttendeeService().startListening(email);
     }
   }
 
@@ -258,6 +259,75 @@ class UserProfileService extends ChangeNotifier {
     yearLevel = newYearLevel;
     notifyListeners();
     await saveToFirestore(uid);
+    await saveToSupabase(uid);
+  }
+
+  // ── Supabase integration ──────────────────────────────────────────────────
+
+  /// Returns true if this Firebase UID has no row in the Supabase users table,
+  /// meaning the user has not yet completed their registration profile.
+  Future<bool> checkIsFirstLogin(String uid) async {
+    final result = await Supabase.instance.client
+        .from('users')
+        .select('id')
+        .eq('uid', uid)
+        .maybeSingle();
+    return result == null;
+  }
+
+  /// Saves the current timestamp to the local cache file as the last login time.
+  Future<void> saveSessionTimestamp(String uid) async {
+    final file = _getLocalFile(uid);
+    if (file == null) return;
+    try {
+      Map<String, dynamic> data = {};
+      if (file.existsSync()) {
+        final content = await file.readAsString();
+        data = jsonDecode(content) as Map<String, dynamic>;
+      }
+      data['lastLoginAt'] = DateTime.now().millisecondsSinceEpoch;
+      await file.writeAsString(jsonEncode(data));
+      dev.log('UserProfileService — saved lastLoginAt for uid: $uid');
+    } catch (e) {
+      dev.log('UserProfileService — failed to save session timestamp: $e');
+    }
+  }
+
+  /// Checks if the cached last login timestamp is older than 7 days.
+  Future<bool> isSessionExpired(String uid) async {
+    final file = _getLocalFile(uid);
+    if (file == null || !file.existsSync()) return false;
+    try {
+      final content = await file.readAsString();
+      final data = jsonDecode(content) as Map<String, dynamic>;
+      final lastLoginAt = data['lastLoginAt'] as int?;
+      if (lastLoginAt == null) return false;
+      
+      final loginTime = DateTime.fromMillisecondsSinceEpoch(lastLoginAt);
+      final difference = DateTime.now().difference(loginTime);
+      return difference.inDays >= 7;
+    } catch (e) {
+      dev.log('UserProfileService — failed to check session expiry: $e');
+      return false;
+    }
+  }
+
+  /// Upserts the current profile fields to the Supabase users table.
+  /// Throws on failure so callers can surface the error.
+  Future<void> saveToSupabase(String uid) async {
+    await Supabase.instance.client.from('users').upsert(
+      {
+        'uid': uid,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'department': department,
+        'program': program,
+        'year_level': yearLevel,
+      },
+      onConflict: 'uid',   // upsert on uid, not the auto-generated id PK
+    );
+    dev.log('UserProfileService — saved profile to Supabase for uid: $uid');
   }
 
   /// Clears all fields (called on sign-out).

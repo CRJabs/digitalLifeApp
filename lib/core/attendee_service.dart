@@ -96,79 +96,92 @@ class AttendeeService extends ChangeNotifier {
   // ── Private ───────────────────────────────────────────────────────────────
 
   RealtimeChannel? _channel;
-  RealtimeChannel? _finesChannel;
-  String? _currentUserName;
+  RealtimeChannel? _finesNoticeChannel;
+  RealtimeChannel? _eventsChannel;
+  Timer? _dayCheckTimer;
+  DateTime? _lastCheckedDay;
+  String? _currentEmail;
   List<dynamic> _cachedEvents = [];
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /// Start listening for attendee changes for [userName].
+  /// Start listening for attendee changes for [email].
   /// Call this after a successful login, once the user profile is loaded.
-  Future<void> startListening(String userName) async {
-    if (userName.isEmpty) return;
-    if (_currentUserName == userName) return; // already listening
-    _currentUserName = userName;
+  Future<void> startListening(String email) async {
+    if (email.isEmpty) return;
+    if (_currentEmail == email) return; // already listening
+    _currentEmail = email;
 
     // Load initial records
-    await _fetchAll(userName);
+    await _fetchAll(email);
 
-    // Calculate initial dues & fetch notices
-    await calculateAndSyncDues();
+    // Calculate initial dues & fetch notice
+    await _fetchCachedEvents();   // must be before refreshDues
+    await refreshDues();
+    await _fetchActiveNotice();
 
-    // Subscribe to realtime updates
+    // Subscribe to realtime attendee updates
     _channel?.unsubscribe();
     _channel = Supabase.instance.client
-        .channel('attendees:$userName')
+        .channel('attendees:$email')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'attendees',
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
-            column: 'name',
-            value: userName,
+            column: 'student_email',
+            value: email,
           ),
           callback: (payload) => _handleChange(payload),
         )
         .subscribe();
 
-    // Subscribe to realtime student_fines changes
-    _finesChannel?.unsubscribe();
-    _finesChannel = Supabase.instance.client
-        .channel('student_fines:$userName')
+    // Subscribe to realtime fines_notice changes
+    _finesNoticeChannel?.unsubscribe();
+    _finesNoticeChannel = Supabase.instance.client
+        .channel('fines_notice')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
-          table: 'student_fines',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'student_name',
-            value: userName,
-          ),
-          callback: (payload) {
-            final newRec = payload.newRecord;
-            if (newRec.isNotEmpty) {
-              studentNotice = newRec['notices'] as String? ?? '';
-              final duesVal = newRec['outstanding_dues'];
-              if (duesVal is num) {
-                outstandingDues = duesVal.toDouble();
-              }
-              notifyListeners();
-            }
+          table: 'fines_notice',
+          callback: (_) => _fetchActiveNotice(),
+        )
+        .subscribe();
+
+    // Subscribe to realtime events changes
+    _eventsChannel?.unsubscribe();
+    _eventsChannel = Supabase.instance.client
+        .channel('events')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'events',
+          callback: (_) async {
+            dev.log('AttendeeService — events changed, refetching and recalculating dues');
+            await _fetchCachedEvents();
+            await refreshDues();
           },
         )
         .subscribe();
 
-    dev.log('AttendeeService — subscribed for user: $userName');
+    _startDayCheckTimer();
+
+    dev.log('AttendeeService — subscribed for email: $email');
   }
 
   /// Stop listening and clear state. Call on sign-out.
   Future<void> stopListening() async {
     _channel?.unsubscribe();
     _channel = null;
-    _finesChannel?.unsubscribe();
-    _finesChannel = null;
-    _currentUserName = null;
+    _finesNoticeChannel?.unsubscribe();
+    _finesNoticeChannel = null;
+    _eventsChannel?.unsubscribe();
+    _eventsChannel = null;
+    _dayCheckTimer?.cancel();
+    _dayCheckTimer = null;
+    _lastCheckedDay = null;
+    _currentEmail = null;
     attendeesByEvent.clear();
     recentActivity.clear();
     _cachedEvents.clear();
@@ -180,87 +193,52 @@ class AttendeeService extends ChangeNotifier {
   /// Returns the attendee record for a specific [eventId], or null if none.
   AttendeeRecord? recordFor(String eventId) => attendeesByEvent[eventId];
 
-  /// Calculates outstanding dues based on required fields of past and current events
-  /// compared with user attendee records, and upserts it to Supabase.
-  Future<void> calculateAndSyncDues() async {
-    if (_currentUserName == null || _currentUserName!.isEmpty) return;
-    try {
-      // 1. Fetch events
-      final eventsData = await Supabase.instance.client
-          .from('events')
-          .select()
-          .order('created_at', ascending: false);
-      _cachedEvents = eventsData as List<dynamic>;
-
-      // 2. Fetch notices
-      final fineRecord = await Supabase.instance.client
-          .from('student_fines')
-          .select()
-          .eq('student_name', _currentUserName!)
-          .maybeSingle();
-
-      if (fineRecord != null) {
-        studentNotice = fineRecord['notices'] as String? ?? '';
-      } else {
-        studentNotice = '';
-      }
-
-      // 3. Compute outstanding dues
-      double computedDues = 0.0;
+  void _startDayCheckTimer() {
+    _dayCheckTimer?.cancel();
+    _lastCheckedDay = DateTime.now();
+    _dayCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       final now = DateTime.now();
-      final todayDate = DateTime(now.year, now.month, now.day);
-
-      for (final eventJson in _cachedEvents) {
-        final eventId = eventJson['id'] as String;
-        final eventDateStr = eventJson['date'] as String? ?? '';
-
-        DateTime? eventDate;
-        try {
-          eventDate = DateTime.parse(eventDateStr);
-        } catch (_) {}
-
-        if (eventDate == null) continue;
-
-        // Fines are only for finished or currently happening events (today or past)
-        final eventCompareDate = DateTime(eventDate.year, eventDate.month, eventDate.day);
-        if (eventCompareDate.isAfter(todayDate)) {
-          continue;
-        }
-
-        final morningInReq = eventJson['morningIn'] as bool? ?? false;
-        final morningOutReq = eventJson['morningOut'] as bool? ?? false;
-        final afternoonInReq = eventJson['afternoonIn'] as bool? ?? false;
-        final afternoonOutReq = eventJson['afternoonOut'] as bool? ?? false;
-
-        final attendee = recordFor(eventId);
-
-        if (morningInReq && (attendee == null || !attendee.morningIn)) {
-          computedDues += 25.0;
-        }
-        if (morningOutReq && (attendee == null || !attendee.morningOut)) {
-          computedDues += 25.0;
-        }
-        if (afternoonInReq && (attendee == null || !attendee.afternoonIn)) {
-          computedDues += 25.0;
-        }
-        if (afternoonOutReq && (attendee == null || !attendee.afternoonOut)) {
-          computedDues += 25.0;
-        }
+      if (_lastCheckedDay == null ||
+          _lastCheckedDay!.year != now.year ||
+          _lastCheckedDay!.month != now.month ||
+          _lastCheckedDay!.day != now.day) {
+        _lastCheckedDay = now;
+        dev.log('AttendeeService — calendar day changed, recalculating dues');
+        refreshDues();
       }
+    });
+  }
 
-      outstandingDues = computedDues;
+  /// Computes outstanding dues from the in-memory getMissingChecks() result
+  /// and notifies listeners. This is always accurate regardless of whether
+  /// the attendees.student_email column has been backfilled.
+  void _recomputeDues() {
+    outstandingDues = getMissingChecks()
+        .fold(0.0, (sum, item) => sum + item.totalFine);
+    dev.log('AttendeeService — recomputeDues: ₱$outstandingDues');
+    notifyListeners();
+  }
 
-      // 4. Save/upsert to database
-      await Supabase.instance.client.from('student_fines').upsert({
-        'student_name': _currentUserName!,
-        'outstanding_dues': outstandingDues,
-        'notices': studentNotice,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      notifyListeners();
+  /// Refreshes outstanding dues. Recomputes from in-memory state, then
+  /// syncs with the server-side view.
+  Future<void> refreshDues() async {
+    _recomputeDues();
+    // Sync with server view if student_email is set
+    if (_currentEmail == null || _currentEmail!.isEmpty) return;
+    try {
+      final row = await Supabase.instance.client
+          .from('student_fines_view')
+          .select('outstanding_dues')
+          .eq('student_email', _currentEmail!)
+          .maybeSingle();
+      final viewDues = (row?['outstanding_dues'] as num?)?.toDouble();
+      if (viewDues != null) {
+        outstandingDues = viewDues;
+        dev.log('AttendeeService — refreshDues: updated outstandingDues from server view to ₱$outstandingDues');
+        notifyListeners();
+      }
     } catch (e) {
-      dev.log('AttendeeService — calculateAndSyncDues error: $e');
+      dev.log('AttendeeService — refreshDues view check error: $e');
     }
   }
 
@@ -320,14 +298,14 @@ class AttendeeService extends ChangeNotifier {
     return list;
   }
 
-  // ── Private helpers ───────────────────────────────────────────────────────
+  // ── Private helpers ──────────────────────────────────────────────────
 
-  Future<void> _fetchAll(String userName) async {
+  Future<void> _fetchAll(String email) async {
     try {
       final data = await Supabase.instance.client
           .from('attendees')
           .select()
-          .eq('name', userName);
+          .ilike('student_email', email);
 
       final records = (data as List<dynamic>)
           .map((j) => AttendeeRecord.fromJson(j as Map<String, dynamic>))
@@ -342,6 +320,34 @@ class AttendeeService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       dev.log('AttendeeService — fetchAll error: $e');
+    }
+  }
+
+  /// Fetches and caches the full events list for getMissingChecks().
+  Future<void> _fetchCachedEvents() async {
+    try {
+      final eventsData = await Supabase.instance.client
+          .from('events')
+          .select()
+          .order('created_at', ascending: false);
+      _cachedEvents = eventsData as List<dynamic>;
+    } catch (e) {
+      dev.log('AttendeeService — _fetchCachedEvents error: $e');
+    }
+  }
+
+  /// Fetches the active admin notice from fines_notice.
+  Future<void> _fetchActiveNotice() async {
+    try {
+      final row = await Supabase.instance.client
+          .from('fines_notice')
+          .select('content')
+          .eq('is_active', true)
+          .maybeSingle();
+      studentNotice = row?['content'] as String? ?? '';
+      notifyListeners();
+    } catch (e) {
+      dev.log('AttendeeService — _fetchActiveNotice error: $e');
     }
   }
 
@@ -412,7 +418,7 @@ class AttendeeService extends ChangeNotifier {
 
       notifyListeners();
       dev.log('AttendeeService — change handled for eventId: ${record.eventId}');
-      await calculateAndSyncDues();
+      await refreshDues();
     } catch (e) {
       dev.log('AttendeeService — _handleChange error: $e');
     }

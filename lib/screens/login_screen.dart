@@ -4,6 +4,7 @@ import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/user_profile_service.dart';
 import 'main_shell.dart';
+import 'registration_screen.dart';
 
 /// Login screen.
 /// The splash gradient is visible in the upper portion; a floating white
@@ -40,14 +41,27 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordCtrl.text,
       );
 
-      // Load this user's profile from Firestore before showing the shell.
+      // Load this user's profile from Firestore before routing.
       await UserProfileService()
           .loadFromFirestore(credential.user!.uid);
+
+      // Save session timestamp
+      await UserProfileService().saveSessionTimestamp(credential.user!.uid);
+
+      if (!mounted) return;
+
+      // Check if the user has previously completed registration.
+      final isFirstLogin = await UserProfileService()
+          .checkIsFirstLogin(credential.user!.uid);
 
       if (!mounted) return;
       setState(() => _loading = false);
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const MainShell()),
+        MaterialPageRoute(
+          builder: (_) => isFirstLogin
+              ? RegistrationScreen(email: credential.user!.email ?? '')
+              : const MainShell(),
+        ),
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;

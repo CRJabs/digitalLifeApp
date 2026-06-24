@@ -206,13 +206,50 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
 
+  DateTime? _parseFallbackDate(String dateStr) {
+    try {
+      return DateTime.parse(dateStr);
+    } catch (_) {
+      try {
+        final cleaned = dateStr.replaceAll(',', '');
+        final parts = cleaned.split(' ');
+        if (parts.length == 3) {
+          final monthStr = parts[0];
+          final dayStr = parts[1];
+          final yearStr = parts[2];
+
+          const months = [
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+          ];
+          final monthIndex = months.indexOf(monthStr);
+          if (monthIndex != -1) {
+            final month = monthIndex + 1;
+            final day = int.parse(dayStr);
+            final year = int.parse(yearStr);
+            return DateTime(year, month, day);
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
   bool _isEventFinished(SupabaseEvent event) {
     try {
-      final datePart = DateTime.parse(event.date);
+      final datePart = _parseFallbackDate(event.date);
+      if (datePart == null) return false;
+
       final timeParts = event.endTime.split(':');
       if (timeParts.length >= 2) {
-        final hour = int.parse(timeParts[0]);
-        final minute = int.parse(timeParts[1]);
+        int hour = int.parse(timeParts[0].trim());
+        final minutePart = timeParts[1].toLowerCase();
+        int minute = int.parse(RegExp(r'\d+').stringMatch(minutePart) ?? '0');
+        if (minutePart.contains('pm') && hour < 12) {
+          hour += 12;
+        } else if (minutePart.contains('am') && hour == 12) {
+          hour = 0;
+        }
         final eventEnd = DateTime(
           datePart.year,
           datePart.month,
@@ -462,6 +499,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final attendee = AttendeeService().recordFor(item.id);
 
     final isFinished = _isEventFinished(item);
+    final datePart = _parseFallbackDate(item.date);
+    final isToday = datePart != null &&
+        DateTime.now().year == datePart.year &&
+        DateTime.now().month == datePart.month &&
+        DateTime.now().day == datePart.day;
     final hasCheck =
         attendee != null &&
         (attendee.morningIn ||
@@ -469,7 +511,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
             attendee.afternoonIn ||
             attendee.afternoonOut);
     final hasRated = _ratedEventIds.contains(item.id);
-    final showRateButton = isFinished && hasCheck && !hasRated;
+    final showRateButton = (isFinished || isToday) && hasCheck && !hasRated;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

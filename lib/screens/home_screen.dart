@@ -32,20 +32,37 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Map<String, String>> _placeholderCarouselItems = [
     {
       'title': 'Sports Fest 2026',
-      'desc': 'UBDays Sports Fest starts Wednesday! Settle your dues to receive your gate entry pass.'
+      'desc': 'UBDays Sports Fest starts Wednesday! Settle your dues to receive your gate entry pass.',
+      'image_url': '',
+      'overlay_color': '',
+      'overlay_opacity': '0.0',
+      'text_color': '',
+      'border_color': '',
     },
     {
       'title': 'Midterm Examinations',
-      'desc': 'Midterms are scheduled for July 6-10. Double check your missing attendance check-ins.'
+      'desc': 'Midterms are scheduled for July 6-10. Double check your missing attendance check-ins.',
+      'image_url': '',
+      'overlay_color': '',
+      'overlay_opacity': '0.0',
+      'text_color': '',
+      'border_color': '',
     },
     {
       'title': 'App Feedback',
-      'desc': 'We want to hear from you! Share your thoughts about the new LiFe app in our online survey.'
+      'desc': 'We want to hear from you! Share your thoughts about the new LiFe app in our online survey.',
+      'image_url': '',
+      'overlay_color': '',
+      'overlay_opacity': '0.0',
+      'text_color': '',
+      'border_color': '',
     },
   ];
 
   List<Map<String, String>> get _activeCarouselItems =>
       _dbCarouselItems.isNotEmpty ? _dbCarouselItems : _placeholderCarouselItems;
+
+  RealtimeChannel? _carouselChannel;
 
   @override
   void initState() {
@@ -54,16 +71,30 @@ class _HomeScreenState extends State<HomeScreen> {
     UserProfileService().addListener(_onProfileUpdate);
     _carouselController = PageController(initialPage: 0);
     _fetchCarouselItems();
+    _subscribeToCarousel();
     _startCarouselTimer();
   }
 
   @override
   void dispose() {
+    _carouselChannel?.unsubscribe();
     _carouselTimer?.cancel();
     _carouselController.dispose();
     AttendeeService().removeListener(_onAttendeeUpdate);
     UserProfileService().removeListener(_onProfileUpdate);
     super.dispose();
+  }
+
+  void _subscribeToCarousel() {
+    _carouselChannel = Supabase.instance.client
+        .channel('carousel:all')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'carousel_items',
+          callback: (_) => _fetchCarouselItems(),
+        )
+        .subscribe();
   }
 
   void _onAttendeeUpdate() => setState(() {});
@@ -82,12 +113,30 @@ class _HomeScreenState extends State<HomeScreen> {
             return {
               'title': item['title'] as String? ?? '',
               'desc': item['description'] as String? ?? '',
+              'image_url': item['image_url'] as String? ?? '',
+              'overlay_image_url': item['overlay_image_url'] as String? ?? '',
+              'overlay_color': item['overlay_color'] as String? ?? '',
+              'overlay_opacity': (item['overlay_opacity'] ?? 0.0).toString(),
+              'text_color': item['text_color'] as String? ?? '',
+              'border_color': item['border_color'] as String? ?? '',
             };
           }).toList();
         });
       }
     } catch (_) {
       // Gracefully fall back to local placeholders on network/db error
+    }
+  }
+
+  Color? _parseHexColor(String hexStr) {
+    try {
+      var hex = hexStr.replaceAll('#', '');
+      if (hex.length == 6) {
+        hex = 'FF$hex';
+      }
+      return Color(int.parse(hex, radix: 16));
+    } catch (_) {
+      return null;
     }
   }
 
@@ -408,16 +457,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final items = _activeCarouselItems;
     if (items.isEmpty) return const SizedBox.shrink();
 
+    // Custom carousel height
+    const double carouselHeight = 90.0;
+
     return Container(
-      height: 80,
+      height: carouselHeight,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(240),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.mysticMint, width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(25),
+            color: Colors.black.withAlpha(20),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -427,69 +479,135 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(16),
         child: Stack(
           children: [
-            // Content
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 50, 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
+            // PageView fills the entire container so background images can be full bleed
+            Positioned.fill(
+              child: PageView.builder(
+                controller: _carouselController,
+                itemCount: items.length,
+                onPageChanged: (page) {
+                  setState(() {
+                    _carouselPage = page;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final imageUrl = item['image_url'];
+                  final overlayImageUrl = item['overlay_image_url'];
+                  final overlayColorStr = item['overlay_color'];
+                  final overlayOpacityVal = double.tryParse(item['overlay_opacity'] ?? '0.0') ?? 0.0;
+                  final textColorStr = item['text_color'];
+                  final borderColorStr = item['border_color'];
+
+                  // Parse colors
+                  Color? overlayColor;
+                  if (overlayColorStr != null && overlayColorStr.isNotEmpty) {
+                    overlayColor = _parseHexColor(overlayColorStr);
+                  }
+                  Color? textColor;
+                  if (textColorStr != null && textColorStr.isNotEmpty) {
+                    textColor = _parseHexColor(textColorStr);
+                  }
+                  Color? borderColor;
+                  if (borderColorStr != null && borderColorStr.isNotEmpty) {
+                    borderColor = _parseHexColor(borderColorStr);
+                  }
+
+                  // Default text colors: white if there is a background image, theme colors otherwise
+                  final hasBgImage = imageUrl != null && imageUrl.isNotEmpty;
+                  final defaultTitleColor = hasBgImage ? Colors.white : AppColors.oceanicNoir;
+                  final defaultDescColor = hasBgImage ? Colors.white.withAlpha(220) : Colors.black87;
+
+                  final titleStyle = TextStyle(
+                    fontFamily: 'Figtree',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: textColor ?? defaultTitleColor,
+                  );
+
+                  final descStyle = TextStyle(
+                    fontFamily: 'Figtree',
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w400,
+                    color: textColor?.withAlpha(220) ?? defaultDescColor,
+                  );
+
+                  return Container(
                     decoration: BoxDecoration(
-                      color: AppColors.nocturnalExpedition.withAlpha(20),
-                      shape: BoxShape.circle,
+                      border: borderColor != null
+                          ? Border.all(color: borderColor, width: 2.0)
+                          : null,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(
-                      Icons.campaign_rounded,
-                      color: AppColors.nocturnalExpedition,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _carouselController,
-                      itemCount: items.length,
-                      onPageChanged: (page) {
-                        setState(() {
-                          _carouselPage = page;
-                        });
-                      },
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              item['title'] ?? '',
-                              style: const TextStyle(
-                                fontFamily: 'Figtree',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.oceanicNoir,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Stack(
+                        children: [
+                          // 1. Background image
+                          if (hasBgImage)
+                            Positioned.fill(
+                              child: Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, err, stack) => Container(
+                                  color: AppColors.nocturnalExpedition.withAlpha(40),
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              item['desc'] ?? '',
-                              style: const TextStyle(
-                                fontFamily: 'Figtree',
-                                fontSize: 10,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.black87,
+
+                          // 2. Custom Overlay Image (if uploaded)
+                          if (overlayImageUrl != null && overlayImageUrl.isNotEmpty)
+                            Positioned.fill(
+                              child: Image.network(
+                                overlayImageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, err, stack) => const SizedBox.shrink(),
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        );
-                      },
+
+                          // 3. Custom Overlay color or Default image overlay for readability
+                          if (overlayColor != null && overlayOpacityVal > 0.0)
+                            Positioned.fill(
+                              child: Container(
+                                color: overlayColor.withOpacity(overlayOpacityVal),
+                              ),
+                            )
+                          else if (hasBgImage)
+                            Positioned.fill(
+                              child: Container(
+                                color: Colors.black.withOpacity(0.35),
+                              ),
+                            ),
+
+                          // 4. Text content
+                          Positioned.fill(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 50, 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    item['title'] ?? '',
+                                    style: titleStyle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    item['desc'] ?? '',
+                                    style: descStyle,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
 
@@ -500,15 +618,18 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 children: List.generate(items.length, (index) {
                   final isSelected = _carouselPage == index;
+                  final activeItem = items[_carouselPage < items.length ? _carouselPage : 0];
+                  final hasBg = activeItem['image_url'] != null && activeItem['image_url']!.isNotEmpty;
+                  final activeDotColor = hasBg ? Colors.white : AppColors.nocturnalExpedition;
+                  final inactiveDotColor = hasBg ? Colors.white.withAlpha(100) : AppColors.mysticMint;
+
                   return AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(left: 3),
                     width: isSelected ? 12 : 5,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.nocturnalExpedition
-                          : AppColors.mysticMint,
+                      color: isSelected ? activeDotColor : inactiveDotColor,
                       borderRadius: BorderRadius.circular(3),
                     ),
                   );

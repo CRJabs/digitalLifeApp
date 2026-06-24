@@ -49,6 +49,7 @@ class AppTextStyles {
     fontSize: 24,
     fontWeight: FontWeight.w700,
     color: AppColors.oceanicNoir,
+    letterSpacing: -1.2,
   );
 
   static const TextStyle sectionTitle = TextStyle(

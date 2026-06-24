@@ -28,6 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     '1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year',
   ];
 
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _phoneCtrl;
@@ -74,20 +75,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       return;
     }
-    await UserProfileService().updateProfile(
-      uid: uid,
-      newName: _nameCtrl.text.trim(),
-      newEmail: _emailCtrl.text.trim(),
-      newPhone: _phoneCtrl.text.trim(),
-      newDept: _selectedDept ?? 'CAHS',
-      newProgram: _programCtrl.text.trim(),
-      newYearLevel: _selectedYear!,
-    );
-    if (!mounted) return;
-    setState(() => _isEditing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Changes saved.')),
-    );
+    if (!_formKey.currentState!.validate()) return;
+
+    try {
+      await UserProfileService().updateProfile(
+        uid: uid,
+        newName: _nameCtrl.text.trim(),
+        newEmail: _emailCtrl.text.trim(),
+        newPhone: _phoneCtrl.text.trim(),
+        newDept: _selectedDept ?? 'CAHS',
+        newProgram: _programCtrl.text.trim(),
+        newYearLevel: _selectedYear!,
+      );
+      if (!mounted) return;
+      setState(() => _isEditing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Changes saved.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save changes: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   Future<void> _signOut() async {
@@ -154,49 +167,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 20),
 
                       // ── Edit form (visible only when editing) ─────────────
-                      if (_isEditing) ...[
-                        _buildLabeledField('Full Name', _nameCtrl),
-                        const SizedBox(height: 14),
-                        _buildLabeledField('Email', _emailCtrl,
-                            keyboardType: TextInputType.emailAddress),
-                        const SizedBox(height: 14),
-                        _buildLabeledField('Phone Number', _phoneCtrl,
-                            keyboardType: TextInputType.phone),
-                        const SizedBox(height: 14),
-                        _buildDropdownField(
-                          'Department',
-                          _selectedDept,
-                          null, // uses _validDepartments by default
-                          (val) => setState(() => _selectedDept = val),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildLabeledField('Program', _programCtrl),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildDropdownField(
-                                'Year Level',
-                                _selectedYear,
-                                const ['1st Year','2nd Year','3rd Year','4th Year','5th Year'],
-                                (val) => setState(() => _selectedYear = val),
+                      if (_isEditing)
+                        Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildLabeledField(
+                                'Full Name',
+                                _nameCtrl,
+                                validator: (v) {
+                                  if (v == null || v.trim().length < 2) {
+                                    return 'Enter your name (at least 2 characters)';
+                                  }
+                                  return null;
+                                },
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        // Save Changes button
-                        SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: _saveChanges,
-                            child: const Text('Save Changes'),
+                              const SizedBox(height: 14),
+                              _buildLabeledField(
+                                'Email',
+                                _emailCtrl,
+                                keyboardType: TextInputType.emailAddress,
+                                readOnly: true,
+                              ),
+                              const SizedBox(height: 14),
+                              _buildLabeledField(
+                                'Phone Number',
+                                _phoneCtrl,
+                                keyboardType: TextInputType.phone,
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) {
+                                    return 'Enter your phone number';
+                                  }
+                                  final digits = v.replaceAll(RegExp(r'[\s\-+]'), '');
+                                  if (!RegExp(r'^\d+$').hasMatch(digits)) {
+                                    return 'Digits and standard symbols only';
+                                  }
+                                  if (digits.length < 7) {
+                                    return 'Must be at least 7 digits';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 14),
+                              _buildDropdownField(
+                                'Department',
+                                _selectedDept,
+                                null, // uses _validDepartments by default
+                                (val) => setState(() => _selectedDept = val),
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildLabeledField(
+                                      'Program',
+                                      _programCtrl,
+                                      validator: (v) {
+                                        if (v == null || v.trim().isEmpty) {
+                                          return 'Enter program';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: _buildDropdownField(
+                                      'Year Level',
+                                      _selectedYear,
+                                      const ['1st Year','2nd Year','3rd Year','4th Year','5th Year'],
+                                      (val) => setState(() => _selectedYear = val),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              // Save Changes button
+                              SizedBox(
+                                height: 52,
+                                child: ElevatedButton(
+                                  onPressed: _saveChanges,
+                                  child: const Text('Save Changes'),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                      ] else ...[
+                        )
+                      else ...[
                         // ── Edit Information button ────────────────────────
                         SizedBox(
                           height: 52,
@@ -236,6 +295,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
+              if (!_isEditing) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 155),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: FractionallySizedBox(
+                      widthFactor: 0.95,
+                      child: Image.asset(
+                        'assets/credits.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -304,6 +378,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String label,
     TextEditingController controller, {
     TextInputType keyboardType = TextInputType.text,
+    FormFieldValidator<String>? validator,
+    bool readOnly = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,7 +395,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
-          style: AppTextStyles.inputHint.copyWith(color: AppColors.oceanicNoir),
+          readOnly: readOnly,
+          validator: validator,
+          style: AppTextStyles.inputHint.copyWith(
+            color: readOnly 
+                ? AppColors.nocturnalExpedition.withAlpha(160) 
+                : AppColors.oceanicNoir,
+          ),
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
@@ -335,13 +417,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: AppColors.nocturnalExpedition,
+              borderSide: BorderSide(
+                color: readOnly 
+                    ? AppColors.mysticMint 
+                    : AppColors.nocturnalExpedition,
                 width: 1.5,
               ),
             ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: readOnly ? AppColors.arcticPowder : Colors.white,
+            suffixIcon: readOnly 
+                ? Icon(
+                    Icons.lock_outline_rounded,
+                    size: 16,
+                    color: AppColors.nocturnalExpedition.withAlpha(120),
+                  )
+                : null,
           ),
         ),
       ],

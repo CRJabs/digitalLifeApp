@@ -42,13 +42,13 @@ class _SplashScreenState extends State<SplashScreen> {
               Image.asset('assets/life.png', width: 200, fit: BoxFit.contain),
               const SizedBox(height: 12),
               Text(
-                'LOG OF INFORMATIVE AND FUN-FILLED EXPERIENCES',
+                'LOG OF INFORMATIVE AND\nFUN-FILLED EXPERIENCES',
                 style: AppTextStyles.splashTagline,
                 textAlign: TextAlign.center,
               ),
               const Spacer(flex: 6),
               Image.asset(
-                'assets/ubfooter.png',
+                'assets/loginFooter.png',
                 width: 180,
                 fit: BoxFit.contain,
               ),

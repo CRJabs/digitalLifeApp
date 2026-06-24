@@ -139,6 +139,31 @@ class UserProfileService extends ChangeNotifier {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
+  /// Exchanges the Firebase ID token for a Supabase custom JWT via the Edge Function
+  /// and sets the Supabase client session.
+  Future<void> exchangeFirebaseToken(String firebaseToken) async {
+    try {
+      final response = await http.post(
+        Uri.parse('https://fsczvbsfhuenrzwxtgyq.supabase.co/functions/v1/firebase-token-exchange'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'firebaseToken': firebaseToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final supabaseToken = body['access_token'];
+        await Supabase.instance.client.auth.setSession(supabaseToken);
+        dev.log('UserProfileService — Token exchanged, Supabase authenticated successfully.');
+      } else {
+        dev.log('UserProfileService — Token exchange failed: Status ${response.statusCode}, Body: ${response.body}');
+        throw Exception('Supabase token exchange returned status ${response.statusCode}');
+      }
+    } catch (e) {
+      dev.log('UserProfileService — Error during token exchange: $e');
+      rethrow;
+    }
+  }
+
   /// Loads the user's profile from Firestore via REST and notifies listeners.
   Future<void> loadFromFirestore(String uid) async {
     // Load local cache first so UI responds instantly.
@@ -150,6 +175,13 @@ class UserProfileService extends ChangeNotifier {
       dev.log('loadFromFirestore — no auth token, skipping load');
       notifyListeners();
       return;
+    }
+
+    // Exchange Firebase token for Supabase session token
+    try {
+      await exchangeFirebaseToken(token);
+    } catch (e) {
+      dev.log('loadFromFirestore — token exchange error: $e');
     }
 
     try {
@@ -334,6 +366,9 @@ class UserProfileService extends ChangeNotifier {
   void clearProfile() {
     _clearFields();
     AttendeeService().stopListening();
+    Supabase.instance.client.auth.signOut().catchError((e) {
+      dev.log('UserProfileService — failed to sign out of Supabase: $e');
+    });
     notifyListeners();
   }
 

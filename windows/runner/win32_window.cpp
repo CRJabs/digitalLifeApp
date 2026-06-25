@@ -179,6 +179,59 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_GETMINMAXINFO: {
+      MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lparam);
+      // Set minimum size (e.g. width = 320, height = 693 for ~19.5:9)
+      mmi->ptMinTrackSize.x = 320;
+      mmi->ptMinTrackSize.y = 693;
+      return 0;
+    }
+
+    case WM_SIZING: {
+      RECT* rect = reinterpret_cast<RECT*>(lparam);
+      double width = static_cast<double>(rect->right - rect->left);
+      double height = static_cast<double>(rect->bottom - rect->top);
+      double current_ratio = width / height;
+
+      double min_ratio = 9.0 / 19.5; // ~0.4615 (19.5:9 portrait limit)
+      double max_ratio = 4.0 / 3.0;  // 1.3333 (4:3 landscape limit)
+
+      if (current_ratio < min_ratio) {
+        if (wparam == WMSZ_LEFT || wparam == WMSZ_RIGHT || wparam == WMSZ_TOPLEFT || wparam == WMSZ_BOTTOMLEFT || wparam == WMSZ_TOPRIGHT || wparam == WMSZ_BOTTOMRIGHT) {
+          double new_width = height * min_ratio;
+          if (wparam == WMSZ_LEFT || wparam == WMSZ_TOPLEFT || wparam == WMSZ_BOTTOMLEFT) {
+            rect->left = rect->right - static_cast<int>(new_width);
+          } else {
+            rect->right = rect->left + static_cast<int>(new_width);
+          }
+        } else {
+          double new_height = width / min_ratio;
+          if (wparam == WMSZ_TOP || wparam == WMSZ_TOPLEFT || wparam == WMSZ_TOPRIGHT) {
+            rect->top = rect->bottom - static_cast<int>(new_height);
+          } else {
+            rect->bottom = rect->top + static_cast<int>(new_height);
+          }
+        }
+      } else if (current_ratio > max_ratio) {
+        if (wparam == WMSZ_LEFT || wparam == WMSZ_RIGHT || wparam == WMSZ_TOPLEFT || wparam == WMSZ_BOTTOMLEFT || wparam == WMSZ_TOPRIGHT || wparam == WMSZ_BOTTOMRIGHT) {
+          double new_width = height * max_ratio;
+          if (wparam == WMSZ_LEFT || wparam == WMSZ_TOPLEFT || wparam == WMSZ_BOTTOMLEFT) {
+            rect->left = rect->right - static_cast<int>(new_width);
+          } else {
+            rect->right = rect->left + static_cast<int>(new_width);
+          }
+        } else {
+          double new_height = width / max_ratio;
+          if (wparam == WMSZ_TOP || wparam == WMSZ_TOPLEFT || wparam == WMSZ_TOPRIGHT) {
+            rect->top = rect->bottom - static_cast<int>(new_height);
+          } else {
+            rect->bottom = rect->top + static_cast<int>(new_height);
+          }
+        }
+      }
+      return TRUE;
+    }
+
     case WM_DESTROY:
       window_handle_ = nullptr;
       Destroy();

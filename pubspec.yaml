@@ -41,6 +41,7 @@ dependencies:
   supabase_flutter: ^2.6.0
 
 dev_dependencies:
+  msix: ^3.16.1
   flutter_test:
     sdk: flutter
 
@@ -80,3 +81,12 @@ flutter:
         - asset: assets/Figtree-VariableFont_wght.ttf
         - asset: assets/Figtree-Italic-VariableFont_wght.ttf
           style: italic
+
+msix_config:
+  display_name: Digital LIFE
+  publisher_display_name: University of Bohol
+  title: Digital LIFE
+  identity_name: com.ub.digitallife
+  publisher: CN=UniversityOfBohol, O=UB, C=PH
+  logo_path: assets/appLogo.png
+

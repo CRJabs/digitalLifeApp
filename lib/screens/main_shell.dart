@@ -52,7 +52,7 @@ class _MainShellState extends State<MainShell> {
               left: 0,
               right: 0,
               bottom: 0,
-              height: 150,
+              height: 142,
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(

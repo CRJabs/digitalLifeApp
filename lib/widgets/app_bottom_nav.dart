@@ -41,45 +41,48 @@ class AppBottomNav extends StatelessWidget {
         ),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: List.generate(_items.length, (i) {
             final isSelected = currentIndex == i;
             final item = _items[i];
-            return GestureDetector(
-              onTap: () => onTap(i),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSelected ? 20 : 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      item.icon,
-                      size: 26,
-                      color: isSelected
-                          ? AppColors.oceanicNoir
-                          : Colors.white.withAlpha(140),
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onTap(i),
+                behavior: HitTestBehavior.opaque,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      item.label,
-                      style: AppTextStyles.navLabel.copyWith(
-                        color: isSelected
-                            ? AppColors.oceanicNoir
-                            : Colors.white.withAlpha(140),
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(30),
                     ),
-                  ],
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          item.icon,
+                          size: 26,
+                          color: isSelected
+                              ? AppColors.oceanicNoir
+                              : Colors.white.withAlpha(140),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          item.label,
+                          style: AppTextStyles.navLabel.copyWith(
+                            color: isSelected
+                                ? AppColors.oceanicNoir
+                                : Colors.white.withAlpha(140),
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             );

@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '479566427899',
     projectId: 'digital-life-app-f82f9',
     storageBucket: 'digital-life-app-f82f9.firebasestorage.app',
-    iosBundleId: 'com.example.digitalLifeApp',
+    iosBundleId: 'com.ub.digitalLifeApp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -73,7 +73,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '479566427899',
     projectId: 'digital-life-app-f82f9',
     storageBucket: 'digital-life-app-f82f9.firebasestorage.app',
-    iosBundleId: 'com.example.digitalLifeApp',
+    iosBundleId: 'com.ub.digitalLifeApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

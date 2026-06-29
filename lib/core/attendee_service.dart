@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'notification_service.dart';
 
 /// Represents a single row in the `attendees` table.
 class AttendeeRecord {
@@ -90,6 +91,12 @@ class AttendeeService extends ChangeNotifier {
   /// Current user's outstanding dues.
   double outstandingDues = 0.0;
 
+  /// Event IDs where the student has completed both rating + written feedback.
+  Set<String> completedFeedbackEventIds = {};
+
+  /// Torchbearer points earned.
+  double torchbearerPoints = 0.0;
+
   /// Current user's notices/announcements from administrators.
   String studentNotice = '';
 
@@ -114,10 +121,12 @@ class AttendeeService extends ChangeNotifier {
 
     // Load initial records
     await _fetchAll(email);
+    await _fetchCompletedFeedback(email);
 
     // Calculate initial dues & fetch notice
     await _fetchCachedEvents();   // must be before refreshDues
     await refreshDues();
+    await _fetchTorchbearerPoints(email);
     await _fetchActiveNotice();
 
     // Subscribe to realtime attendee updates
@@ -186,12 +195,57 @@ class AttendeeService extends ChangeNotifier {
     recentActivity.clear();
     _cachedEvents.clear();
     outstandingDues = 0.0;
+    torchbearerPoints = 0.0;
+    completedFeedbackEventIds.clear();
     studentNotice = '';
     notifyListeners();
   }
 
   /// Returns the attendee record for a specific [eventId], or null if none.
   AttendeeRecord? recordFor(String eventId) => attendeesByEvent[eventId];
+
+  Future<void> refreshCompletedFeedback() async {
+    if (_currentEmail != null) {
+      await _fetchCompletedFeedback(_currentEmail!);
+      await refreshDues();
+    }
+  }
+
+  Future<void> _fetchCompletedFeedback(String email) async {
+    try {
+      final data = await Supabase.instance.client
+          .from('event_ratings')
+          .select('event_id')
+          .eq('student_email', email)
+          .not('feedback_text', 'is', null);
+
+      completedFeedbackEventIds = (data as List)
+          .map((r) => r['event_id'].toString())
+          .toSet();
+      notifyListeners();
+    } catch (e) {
+      dev.log('AttendeeService — _fetchCompletedFeedback error: $e');
+    }
+  }
+
+  Future<void> _fetchTorchbearerPoints(String email) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('attendees')
+          .select('pointsEarned')
+          .ilike('student_email', email);
+
+      double total = 0.0;
+      for (final row in (rows as List)) {
+        total += (row['pointsEarned'] as num?)?.toDouble() ?? 0.0;
+      }
+      torchbearerPoints = total;
+      dev.log('AttendeeService — torchbearerPoints: $torchbearerPoints');
+      notifyListeners();
+    } catch (e) {
+      dev.log('AttendeeService — fetchTorchbearerPoints error: $e');
+    }
+  }
 
   void _startDayCheckTimer() {
     _dayCheckTimer?.cancel();
@@ -233,6 +287,13 @@ class AttendeeService extends ChangeNotifier {
           .maybeSingle();
       final viewDues = (row?['outstanding_dues'] as num?)?.toDouble();
       if (viewDues != null) {
+        if (viewDues > outstandingDues) {
+          final diff = viewDues - outstandingDues;
+          NotificationService.showLocalNotification(
+            'New Fine Added 🔴',
+            'A fine of ₱${diff.toStringAsFixed(2)} has been added to your account.',
+          );
+        }
         outstandingDues = viewDues;
         dev.log('AttendeeService — refreshDues: updated outstandingDues from server view to ₱$outstandingDues');
         notifyListeners();
@@ -287,11 +348,12 @@ class AttendeeService extends ChangeNotifier {
       }
 
       if (missingSlots.isNotEmpty) {
+        final hasFeedback = completedFeedbackEventIds.contains(eventId);
         list.add(MissingCheckInfo(
           eventName: eventName,
           date: eventDateStr,
           missingSlots: missingSlots,
-          totalFine: missingSlots.length * 25.0,
+          totalFine: hasFeedback ? 0.0 : missingSlots.length * 25.0,
         ));
       }
     }
@@ -344,7 +406,14 @@ class AttendeeService extends ChangeNotifier {
           .select('content')
           .eq('is_active', true)
           .maybeSingle();
-      studentNotice = row?['content'] as String? ?? '';
+      final newNotice = row?['content'] as String? ?? '';
+      if (newNotice.isNotEmpty && newNotice != studentNotice) {
+        NotificationService.showLocalNotification(
+          'New Notice from Admin 📋',
+          newNotice.length > 80 ? '${newNotice.substring(0, 80)}...' : newNotice,
+        );
+      }
+      studentNotice = newNotice;
       notifyListeners();
     } catch (e) {
       dev.log('AttendeeService — _fetchActiveNotice error: $e');
@@ -382,6 +451,10 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Morning Attendance Checked In',
           timestamp: DateTime.now(),
         ));
+        NotificationService.showLocalNotification(
+          'Morning Check-in Confirmed ✅',
+          'Your morning check-in for $eventName has been recorded.',
+        );
       }
       if (_didFlipTrue(previous?.morningOut, record.morningOut)) {
         newItems.add(RecentActivityItem(
@@ -389,6 +462,10 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Morning Attendance Checked Out',
           timestamp: DateTime.now(),
         ));
+        NotificationService.showLocalNotification(
+          'Morning Check-out Confirmed ✅',
+          'Your morning check-out for $eventName has been recorded.',
+        );
       }
       if (_didFlipTrue(previous?.afternoonIn, record.afternoonIn)) {
         newItems.add(RecentActivityItem(
@@ -396,6 +473,10 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Afternoon Attendance Checked In',
           timestamp: DateTime.now(),
         ));
+        NotificationService.showLocalNotification(
+          'Afternoon Check-in Confirmed ✅',
+          'Your afternoon check-in for $eventName has been recorded.',
+        );
       }
       if (_didFlipTrue(previous?.afternoonOut, record.afternoonOut)) {
         newItems.add(RecentActivityItem(
@@ -403,6 +484,10 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Afternoon Attendance Checked Out',
           timestamp: DateTime.now(),
         ));
+        NotificationService.showLocalNotification(
+          'Afternoon Check-out Confirmed ✅',
+          'Your afternoon check-out for $eventName has been recorded.',
+        );
       }
 
       // Update stored record
@@ -416,6 +501,10 @@ class AttendeeService extends ChangeNotifier {
         recentActivity.removeRange(_maxRecentItems, recentActivity.length);
       }
 
+      if (_currentEmail != null) {
+        await _fetchCompletedFeedback(_currentEmail!);
+        await _fetchTorchbearerPoints(_currentEmail!);
+      }
       notifyListeners();
       dev.log('AttendeeService — change handled for eventId: ${record.eventId}');
       await refreshDues();

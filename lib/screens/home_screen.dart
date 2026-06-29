@@ -29,6 +29,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _carouselPage = 0;
   List<Map<String, String>> _dbCarouselItems = [];
 
+  final PageController _dualCardController = PageController();
+  int _dualCardPage = 0;
+
   final List<Map<String, String>> _placeholderCarouselItems = [
     {
       'title': 'Sports Fest 2026',
@@ -80,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _carouselChannel?.unsubscribe();
     _carouselTimer?.cancel();
     _carouselController.dispose();
+    _dualCardController.dispose();
     AttendeeService().removeListener(_onAttendeeUpdate);
     UserProfileService().removeListener(_onProfileUpdate);
     super.dispose();
@@ -174,11 +178,11 @@ class _HomeScreenState extends State<HomeScreen> {
               // ── Scrollable body ─────────────────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 240), // Large bottom padding to scroll past floating carousel + navbar
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 304), // Large bottom padding to scroll past floating carousel + navbar
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildOutstandingDuesCard(),
+                      _buildDualInfoCard(),
                       _buildViewQrCard(),
                       const SizedBox(height: 28),
                       _buildSectionHeader(),
@@ -196,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
             left: 0,
             right: 0,
             bottom: 0,
-            height: 260,
+            height: 282,
             child: IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
@@ -228,10 +232,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Outstanding Dues card ────────────────────────────────────────────────
-  Widget _buildOutstandingDuesCard() {
+  // ── Outstanding Dues / Points card ──────────────────────────────────────
+  Widget _buildDualInfoCard() {
     final dues = AttendeeService().outstandingDues;
+    final points = AttendeeService().torchbearerPoints;
+
     return Container(
+      height: 88,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -242,87 +249,189 @@ class _HomeScreenState extends State<HomeScreen> {
             color: Colors.black.withAlpha(15),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          ),
+          )
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        child: Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
           children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: AppColors.oceanicNoir.withAlpha(20),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.payments_rounded,
-                color: AppColors.oceanicNoir,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: PageView(
+                controller: _dualCardController,
+                onPageChanged: (p) => setState(() => _dualCardPage = p),
                 children: [
-                  const Text(
-                    'Outstanding Fines',
-                    style: TextStyle(
-                      fontFamily: 'Figtree',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF5A6E77),
+                  // Page 1: Outstanding Fines
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: AppColors.oceanicNoir.withAlpha(20),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.payments_rounded,
+                            color: AppColors.oceanicNoir,
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'Outstanding Fines',
+                                style: TextStyle(
+                                  fontFamily: 'Figtree',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF5A6E77),
+                                ),
+                              ),
+                              Text(
+                                '₱${dues.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontFamily: 'Figtree',
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.oceanicNoir,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (dues > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Pending',
+                              style: TextStyle(
+                                fontFamily: 'Figtree',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.red.shade700,
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Cleared',
+                              style: TextStyle(
+                                fontFamily: 'Figtree',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '₱${dues.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontFamily: 'Figtree',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.oceanicNoir,
+                  // Page 2: Torchbearer Points
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.emoji_events_rounded,
+                            color: Colors.amber.shade700,
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'Torchbearer Points',
+                                style: TextStyle(
+                                  fontFamily: 'Figtree',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF5A6E77),
+                                ),
+                              ),
+                              Text(
+                                '${points.toStringAsFixed(0)} pts',
+                                style: TextStyle(
+                                  fontFamily: 'Figtree',
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.amber.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            points > 0 ? 'Earned' : 'None yet',
+                            style: TextStyle(
+                              fontFamily: 'Figtree',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.amber.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            if (dues > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'Pending',
-                  style: TextStyle(
-                    fontFamily: 'Figtree',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.red.shade700,
-                  ),
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'Cleared',
-                  style: TextStyle(
-                    fontFamily: 'Figtree',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.green.shade700,
+            // Page indicator dots
+            Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  2,
+                  (i) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    width: _dualCardPage == i ? 12 : 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: _dualCardPage == i
+                          ? AppColors.nocturnalExpedition
+                          : AppColors.mysticMint,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -458,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (items.isEmpty) return const SizedBox.shrink();
 
     // Custom carousel height
-    const double carouselHeight = 90.0;
+    const double carouselHeight = 154.0;
 
     return Container(
       height: carouselHeight,
@@ -514,8 +623,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // Default text colors: white if there is a background image, theme colors otherwise
                   final hasBgImage = imageUrl != null && imageUrl.isNotEmpty;
-                  final defaultTitleColor = hasBgImage ? Colors.white : AppColors.oceanicNoir;
-                  final defaultDescColor = hasBgImage ? Colors.white.withAlpha(220) : Colors.black87;
+                  final defaultTitleColor = hasBgImage ? Colors.white : const Color(0xFF333333);
+                  final defaultDescColor = hasBgImage ? Colors.white.withAlpha(220) : const Color(0xFF333333);
 
                   final titleStyle = TextStyle(
                     fontFamily: 'Figtree',
@@ -596,7 +705,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     item['desc'] ?? '',
                                     style: descStyle,
-                                    maxLines: 2,
+                                    maxLines: 4,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ],

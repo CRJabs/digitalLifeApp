@@ -146,16 +146,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         style: AppTextStyles.loginTitle,
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'This information is required to track your\nattendance and dues.',
-                        style: AppTextStyles.activitySubtitle.copyWith(
-                          fontSize: 12,
-                          height: 1.4,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
 
                       // ── Full Name ─────────────────────────────────────────
                       _buildLabel('Full Name'),

@@ -15,6 +15,9 @@ class FinesScreen extends StatefulWidget {
 }
 
 class _FinesScreenState extends State<FinesScreen> {
+  final PageController _finesCardController = PageController();
+  int _finesCardPage = 0;
+
   @override
   void initState() {
     super.initState();
@@ -24,6 +27,7 @@ class _FinesScreenState extends State<FinesScreen> {
   @override
   void dispose() {
     AttendeeService().removeListener(_onServiceUpdate);
+    _finesCardController.dispose();
     super.dispose();
   }
 
@@ -110,9 +114,12 @@ class _FinesScreenState extends State<FinesScreen> {
     );
   }
 
-  // ── Outstanding Dues Card ───────────────────────────────────────────────
+  // ── Outstanding Dues Card (Swipeable) ───────────────────────────────────
   Widget _buildDuesCard(double dues) {
+    final equivalentHours = (dues / 50.0);
+
     return Container(
+      height: 148,
       decoration: BoxDecoration(
         color: AppColors.oceanicNoir,
         borderRadius: BorderRadius.circular(16),
@@ -124,39 +131,113 @@ class _FinesScreenState extends State<FinesScreen> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            'Total Accumulated Fines',
-            style: TextStyle(
-              fontFamily: 'Figtree',
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: Colors.white.withAlpha(200),
+          Expanded(
+            child: PageView(
+              controller: _finesCardController,
+              onPageChanged: (p) => setState(() => _finesCardPage = p),
+              children: [
+                // Page 1: Total Accumulated Fines
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Total Accumulated Fines',
+                        style: TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withAlpha(200),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '₱${dues.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '₱25.00 fine per missing attendance',
+                        style: TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.white.withAlpha(160),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                // Page 2: Equivalent Hours to render
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Equivalent Hours to Render',
+                        style: TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withAlpha(200),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${equivalentHours.toStringAsFixed(1)} hrs',
+                        style: const TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '1 hour per ₱50 accumulated dues',
+                        style: TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.white.withAlpha(160),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            '₱${dues.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontFamily: 'Figtree',
-              fontSize: 36,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
+          // Dots indicator
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                2,
+                (i) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: _finesCardPage == i ? 12 : 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: _finesCardPage == i ? Colors.white : Colors.white.withAlpha(100),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '₱25.00 fine per missing attendance',
-            style: TextStyle(
-              fontFamily: 'Figtree',
-              fontSize: 11,
-              fontStyle: FontStyle.italic,
-              color: Colors.white.withAlpha(160),
-            ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

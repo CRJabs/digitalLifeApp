@@ -3,8 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/user_profile_service.dart';
+import '../core/security_service.dart';
 import 'main_shell.dart';
 import 'registration_screen.dart';
+import 'forgot_password_screen.dart';
 
 /// Login screen.
 /// The splash gradient is visible in the upper portion; a floating white
@@ -33,6 +35,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final cooldownRemaining = await SecurityService().getLoginCooldownRemaining();
+    if (cooldownRemaining > 0) {
+      String waitText = '$cooldownRemaining seconds';
+      if (cooldownRemaining > 60) {
+        waitText = '${(cooldownRemaining / 60).ceil()} minutes';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Too many failed login attempts. Please try again in $waitText.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
     
     try {
@@ -40,6 +58,8 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
       );
+
+      await SecurityService().recordLoginAttempt(true);
 
       // Load this user's profile from Firestore before routing.
       await UserProfileService()
@@ -64,18 +84,29 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } on FirebaseAuthException catch (e) {
+      await SecurityService().recordLoginAttempt(false);
+      final newCooldown = await SecurityService().getLoginCooldownRemaining();
+
       if (!mounted) return;
       setState(() => _loading = false);
       
       String message = 'An error occurred. Please try again.';
-      if (e.code == 'user-not-found') {
-        message = 'No user found for that email.';
-      } else if (e.code == 'wrong-password') {
-        message = 'Wrong password provided.';
-      } else if (e.code == 'invalid-email') {
-        message = 'The email address is invalid.';
-      } else if (e.message != null) {
-        message = e.message!;
+      if (newCooldown > 0) {
+        String waitText = '$newCooldown seconds';
+        if (newCooldown > 60) {
+          waitText = '${(newCooldown / 60).ceil()} minutes';
+        }
+        message = 'Wrong credentials. Too many failed attempts: Login locked for $waitText.';
+      } else {
+        if (e.code == 'user-not-found') {
+          message = 'No user found for that email.';
+        } else if (e.code == 'wrong-password') {
+          message = 'Wrong password provided.';
+        } else if (e.code == 'invalid-email') {
+          message = 'The email address is invalid.';
+        } else if (e.message != null) {
+          message = e.message!;
+        }
       }
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -85,6 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } catch (e) {
+      await SecurityService().recordLoginAttempt(false);
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -205,6 +237,25 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 )
                               : const Text('Sign In'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ForgotPasswordScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Forgot Password?',
+                          style: TextStyle(
+                            fontFamily: 'Figtree',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.nocturnalExpedition,
+                          ),
                         ),
                       ),
 

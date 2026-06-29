@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../firebase_options.dart';
 import 'attendee_service.dart';
+import 'notification_service.dart';
 
 /// Singleton profile service that extends ChangeNotifier to make user data
 /// updates reactive.
@@ -31,6 +32,7 @@ class UserProfileService extends ChangeNotifier {
   String yearLevel = '';
 
   Timer? _rotationTimer;
+  DateTime? _lastNotifiedDate;
 
   // ── Firestore REST API constants ──────────────────────────────────────────
   static const String _projectId = 'digital-life-app-f82f9';
@@ -386,6 +388,18 @@ class UserProfileService extends ChangeNotifier {
   void startDailyRotation() {
     _rotationTimer?.cancel();
     _rotationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      final now = DateTime.now();
+      // Only notify if the day has actually changed
+      if (_lastNotifiedDate != null &&
+          (_lastNotifiedDate!.day != now.day ||
+           _lastNotifiedDate!.month != now.month ||
+           _lastNotifiedDate!.year != now.year)) {
+        NotificationService.showLocalNotification(
+          'QR Code Updated 🔄',
+          'Your attendance QR code has been refreshed for today.',
+        );
+      }
+      _lastNotifiedDate = now;
       notifyListeners();
     });
   }

@@ -120,7 +120,7 @@ class ScannerScreen extends StatelessWidget {
 
                         // ── Notice text ───────────────────────────────────
                         Text(
-                          'Note: The generated QR code is temporary and will change after 24 hours.',
+                          'Note: Your QR code is valid today only and resets at midnight.',
                           style: TextStyle(
                             fontFamily: 'Figtree',
                             fontSize: 12,

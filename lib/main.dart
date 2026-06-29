@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'core/app_colors.dart';
 import 'core/app_text_styles.dart';
 import 'core/user_profile_service.dart';
+import 'core/notification_service.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
@@ -13,6 +14,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await NotificationService.initialize();
   await Supabase.initialize(
     url: 'https://fsczvbsfhuenrzwxtgyq.supabase.co',
     publishableKey: 'sb_publishable_PtsfIjaL-mJUC8hBcHd0fw_sDYj6iWU',

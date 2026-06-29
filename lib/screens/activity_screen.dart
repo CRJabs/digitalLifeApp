@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/app_colors.dart';
 import '../core/app_date_utils.dart';
 import '../core/app_text_styles.dart';
@@ -20,6 +21,7 @@ class SupabaseEvent {
   final bool morningOut;
   final bool afternoonIn;
   final bool afternoonOut;
+  final String? googleFormsLink;
 
   const SupabaseEvent({
     required this.id,
@@ -33,6 +35,7 @@ class SupabaseEvent {
     required this.morningOut,
     required this.afternoonIn,
     required this.afternoonOut,
+    this.googleFormsLink,
   });
 
   factory SupabaseEvent.fromJson(Map<String, dynamic> json) {
@@ -48,6 +51,7 @@ class SupabaseEvent {
       morningOut: json['morningOut'] as bool? ?? false,
       afternoonIn: json['afternoonIn'] as bool? ?? false,
       afternoonOut: json['afternoonOut'] as bool? ?? false,
+      googleFormsLink: json['googleFormsLink'] as String?,
     );
   }
 }
@@ -68,7 +72,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // Track which section categories are expanded
   final Map<String, bool> _expanded = {};
   List<SupabaseEvent> _events = [];
-  Set<String> _ratedEventIds = {};
+  Map<String, String?> _ratingFeedbacks = {};
   bool _isLoading = true;
   String? _error;
 
@@ -142,24 +146,26 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .toList();
 
       // Fetch student's ratings to know which events they've rated
-      final userName = UserProfileService().name;
-      Set<String> ratedIds = {};
+      final userEmail = UserProfileService().email;
+      Map<String, String?> ratingFeedbacks = {};
       try {
         final ratingsData = await Supabase.instance.client
             .from('event_ratings')
-            .select('event_id')
-            .eq('student_name', userName);
+            .select('event_id, feedback_text')
+            .eq('student_email', userEmail);
 
         final List<dynamic> ratingsList = ratingsData as List<dynamic>;
-        ratedIds = ratingsList.map((r) => r['event_id'].toString()).toSet();
+        for (final r in ratingsList) {
+          ratingFeedbacks[r['event_id'].toString()] = r['feedback_text'] as String?;
+        }
       } catch (_) {
-        // If table doesn't exist yet, default to empty set
+        // If table doesn't exist yet, default to empty map
       }
 
       if (!mounted) return;
       setState(() {
         _events = fetchedEvents;
-        _ratedEventIds = ratedIds;
+        _ratingFeedbacks = ratingFeedbacks;
         _isLoading = false;
         _error = null;
 
@@ -175,6 +181,42 @@ class _ActivityScreenState extends State<ActivityScreen> {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _markGFormsAnswered(String eventId, String url) async {
+    try {
+      await launchUrl(Uri.parse(url));
+
+      final userEmail = UserProfileService().email;
+      final userName = UserProfileService().name;
+      if (userEmail != null) {
+        // First check if there is an existing rating for this user & event
+        final existing = await Supabase.instance.client
+            .from('event_ratings')
+            .select('rating, feedback_text')
+            .eq('event_id', eventId)
+            .eq('student_email', userEmail)
+            .maybeSingle();
+
+        final ratingData = existing as Map<String, dynamic>?;
+
+        await Supabase.instance.client
+            .from('event_ratings')
+            .upsert({
+              'event_id': eventId,
+              'student_name': userName ?? 'Anonymous',
+              'student_email': userEmail,
+              'rating': ratingData != null ? ratingData['rating'] as int? ?? 0 : 0,
+              'feedback_text': ratingData != null ? ratingData['feedback_text'] as String? ?? '' : '',
+              'answered_gforms': true,
+            });
+        
+        // Refresh events and ratings
+        await _fetchEvents();
+      }
+    } catch (e) {
+      debugPrint('Error marking GForms as answered: $e');
     }
   }
 
@@ -295,6 +337,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         'Activity History',
                         style: AppTextStyles.welcomeName,
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${AttendeeService().attendeesByEvent.length} events attended',
+                        style: AppTextStyles.activitySubtitle.copyWith(
+                          fontSize: 12,
+                          color: AppColors.oceanicNoir.withAlpha(180),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -361,27 +411,29 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     if (_events.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.event_note_rounded,
-              color: AppColors.nocturnalExpedition.withAlpha(80),
-              size: 56,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'No events found',
-              style: AppTextStyles.activityTitle.copyWith(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _fetchEvents,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Refresh'),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(140, 44)),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.event_busy_rounded, size: 72, color: AppColors.mysticMint),
+              const SizedBox(height: 16),
+              Text('No activity to show yet', style: AppTextStyles.sectionTitle),
+              const SizedBox(height: 6),
+              Text(
+                'Your attendance history will appear here\nonce events have been tracked.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.activitySubtitle,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _fetchEvents,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Refresh'),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(140, 44)),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -419,13 +471,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               decoration: BoxDecoration(
-                color: AppColors.nocturnalExpedition,
+                gradient: const LinearGradient(
+                  colors: [AppColors.nocturnalExpedition, AppColors.oceanicNoir],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
                 borderRadius: isExpanded
-                    ? const BorderRadius.vertical(top: Radius.circular(10))
-                    : BorderRadius.circular(10),
+                    ? const BorderRadius.vertical(top: Radius.circular(14))
+                    : BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.nocturnalExpedition.withAlpha(40),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     category,
@@ -436,6 +498,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       color: Colors.white,
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(25),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${categoryEvents.length} ${categoryEvents.length == 1 ? "event" : "events"}',
+                      style: const TextStyle(
+                        fontFamily: 'Figtree',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
                   Transform.rotate(
                     angle: isExpanded ? 0.0 : -3.14159,
                     child: const Icon(
@@ -455,7 +535,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 color: Colors.white,
                 border: Border.all(color: AppColors.mysticMint, width: 1),
                 borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(10),
+                  bottom: Radius.circular(14),
                 ),
               ),
               child: categoryEvents.isEmpty
@@ -490,6 +570,42 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
+  Widget _buildFeedbackBadge(bool hasCheck, bool hasRated, bool isFeedbackDone) {
+    if (!hasCheck) return const SizedBox.shrink();
+
+    String label;
+    Color color;
+    if (isFeedbackDone) {
+      label = 'Rated & Feedback Done';
+      color = const Color(0xFF27AE60);
+    } else if (hasRated) {
+      label = 'Rated (Needs Feedback Text)';
+      color = const Color(0xFFF2C94C);
+    } else {
+      label = 'Feedback Pending';
+      color = Colors.grey.shade500;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(25),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(80), width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Figtree',
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   Widget _buildAttendanceRow(SupabaseEvent item) {
     // Event booleans: whether the event has AM/PM slots at all
     final hasAm = item.morningIn || item.morningOut;
@@ -510,8 +626,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
             attendee.morningOut ||
             attendee.afternoonIn ||
             attendee.afternoonOut);
-    final hasRated = _ratedEventIds.contains(item.id);
-    final showRateButton = (isFinished || isToday) && hasCheck && !hasRated;
+    final hasRated = _ratingFeedbacks.containsKey(item.id);
+    final feedbackText = _ratingFeedbacks[item.id];
+    final isFeedbackDone = hasRated && feedbackText != null && feedbackText.trim().isNotEmpty;
+    final showHelpButton = (isFinished || isToday) && hasCheck;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -535,6 +653,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         fontSize: 11,
                       ),
                     ),
+                    _buildFeedbackBadge(hasCheck, hasRated, isFeedbackDone),
                   ],
                 ),
               ),
@@ -564,42 +683,124 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ),
             ],
           ),
-          if (showRateButton) ...[
+          if (showHelpButton) ...[
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _showRatingModal(item),
-                icon: const Icon(
-                  Icons.star_border_rounded,
-                  size: 16,
-                  color: AppColors.oceanicNoir,
-                ),
-                label: const Text(
-                  'Rate this event!',
-                  style: TextStyle(
-                    fontFamily: 'Figtree',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.oceanicNoir,
+            if (!isFeedbackDone)
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () => _showRatingModal(item),
+                      icon: const Icon(
+                        Icons.star_border_rounded,
+                        size: 16,
+                        color: AppColors.oceanicNoir,
+                      ),
+                      label: const Text(
+                        'Rate this event!',
+                        style: TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.oceanicNoir,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        backgroundColor: AppColors.mysticMint.withAlpha(40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          side: const BorderSide(
+                            color: AppColors.mysticMint,
+                            width: 0.8,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
+                  if (item.googleFormsLink != null && item.googleFormsLink!.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextButton.icon(
+                    onPressed: () => _markGFormsAnswered(
+                      item.id,
+                      item.googleFormsLink!,
+                    ),
+                        icon: const Icon(
+                          Icons.feedback_outlined,
+                          size: 16,
+                          color: AppColors.oceanicNoir,
+                        ),
+                        label: const Text(
+                          'Help us Improve',
+                          style: TextStyle(
+                            fontFamily: 'Figtree',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.oceanicNoir,
+                          ),
+                        ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        backgroundColor: AppColors.mysticMint.withAlpha(40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          side: const BorderSide(
+                            color: AppColors.mysticMint,
+                            width: 0.8,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  backgroundColor: AppColors.mysticMint.withAlpha(40),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                    side: const BorderSide(
-                      color: AppColors.mysticMint,
-                      width: 0.8,
+                  ],
+                ],
+              )
+            else
+              if (item.googleFormsLink != null && item.googleFormsLink!.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => _markGFormsAnswered(
+                      item.id,
+                      item.googleFormsLink!,
+                    ),
+                    icon: const Icon(
+                      Icons.feedback_outlined,
+                      size: 16,
+                      color: AppColors.oceanicNoir,
+                    ),
+                    label: const Text(
+                      'Help us Improve',
+                      style: TextStyle(
+                        fontFamily: 'Figtree',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.oceanicNoir,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      backgroundColor: AppColors.mysticMint.withAlpha(40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        side: const BorderSide(
+                          color: AppColors.mysticMint,
+                          width: 0.8,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
           ],
         ],
       ),
@@ -608,286 +809,40 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   void _showRatingModal(SupabaseEvent event) {
     final userName = UserProfileService().name;
+    final userEmail = UserProfileService().email;
 
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) {
-        int selectedRating = 0;
-        bool isLoading = true;
-        bool isSubmitting = false;
-        String? modalError;
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            // Fetch initial rating once
-            if (isLoading && modalError == null) {
-              Future.microtask(() async {
-                try {
-                  final data = await Supabase.instance.client
-                      .from('event_ratings')
-                      .select('rating')
-                      .eq('event_id', event.id)
-                      .eq('student_name', userName)
-                      .maybeSingle();
-
-                  if (!context.mounted) return;
-                  setModalState(() {
-                    if (data != null && data['rating'] != null) {
-                      selectedRating = data['rating'] as int;
-                    }
-                    isLoading = false;
-                  });
-                } catch (e) {
-                  if (!context.mounted) return;
-                  setModalState(() {
-                    isLoading = false;
-                  });
-                }
-              });
-            }
-
-            final ratingLabels = [
-              'Select rating',
-              'Poor',
-              'Fair',
-              'Good',
-              'Very Good',
-              'Excellent',
-            ];
-
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              backgroundColor: Colors.white,
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Rate Event',
-                          style: TextStyle(
-                            fontFamily: 'Figtree',
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.oceanicNoir,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close_rounded, size: 20),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          color: AppColors.nocturnalExpedition.withAlpha(120),
-                        ),
-                      ],
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: Colors.white,
+          child: _RatingDialogContent(
+            event: event,
+            userName: userName,
+            userEmail: userEmail,
+            onSubmitted: () async {
+              await AttendeeService().refreshCompletedFeedback();
+              _fetchEvents();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Thank you for your feedback!',
+                    style: TextStyle(
+                      fontFamily: 'Figtree',
+                      fontSize: 13,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'How would you rate your experience at "${event.eventName}"?',
-                      style: const TextStyle(
-                        fontFamily: 'Figtree',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF5A6E77),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    if (isLoading)
-                      const SizedBox(
-                        height: 60,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.oceanicNoir,
-                            strokeWidth: 3,
-                          ),
-                        ),
-                      )
-                    else ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(5, (index) {
-                          final starRating = index + 1;
-                          final isStarred = starRating <= selectedRating;
-                          return GestureDetector(
-                            onTap: () {
-                              setModalState(() {
-                                selectedRating = starRating;
-                              });
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              child: Icon(
-                                isStarred
-                                    ? Icons.star_rounded
-                                    : Icons.star_border_rounded,
-                                size: 40,
-                                color: isStarred
-                                    ? Colors.amber.shade600
-                                    : AppColors.mysticMint,
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 150),
-                        child: Text(
-                          ratingLabels[selectedRating],
-                          key: ValueKey(selectedRating),
-                          style: TextStyle(
-                            fontFamily: 'Figtree',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: selectedRating > 0
-                                ? AppColors.oceanicNoir
-                                : Colors.grey,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: isSubmitting
-                                  ? null
-                                  : () => Navigator.pop(context),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(
-                                  color: AppColors.mysticMint,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                              ),
-                              child: const Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  fontFamily: 'Figtree',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.nocturnalExpedition,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: (selectedRating == 0 || isSubmitting)
-                                  ? null
-                                  : () async {
-                                      setModalState(() {
-                                        isSubmitting = true;
-                                      });
-                                      try {
-                                        await Supabase.instance.client
-                                            .from('event_ratings')
-                                            .upsert({
-                                              'event_id': event.id,
-                                              'student_name': userName,
-                                              'rating': selectedRating,
-                                            });
-
-                                        if (!mounted) return;
-                                        if (context.mounted) {
-                                          Navigator.pop(context);
-                                        }
-                                        setState(() {
-                                          _ratedEventIds.add(event.id);
-                                        });
-                                        ScaffoldMessenger.of(
-                                          this.context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Thank you for your feedback!',
-                                              style: const TextStyle(
-                                                fontFamily: 'Figtree',
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                            backgroundColor:
-                                                AppColors.oceanicNoir,
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
-                                        );
-                                      } catch (e) {
-                                        if (!context.mounted) return;
-                                        setModalState(() {
-                                          isSubmitting = false;
-                                          modalError =
-                                              'Failed to submit rating: $e';
-                                        });
-                                      }
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.oceanicNoir,
-                                disabledBackgroundColor: AppColors.oceanicNoir
-                                    .withAlpha(80),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                                elevation: 0,
-                              ),
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Submit',
-                                      style: TextStyle(
-                                        fontFamily: 'Figtree',
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (modalError != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          modalError!,
-                          style: const TextStyle(
-                            fontFamily: 'Figtree',
-                            fontSize: 11,
-                            color: Colors.redAccent,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ],
-                  ],
+                  ),
+                  backgroundColor: AppColors.oceanicNoir,
+                  behavior: SnackBarBehavior.floating,
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
@@ -920,6 +875,303 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 }
 
+class _RatingDialogContent extends StatefulWidget {
+  const _RatingDialogContent({
+    required this.event,
+    required this.userName,
+    required this.userEmail,
+    required this.onSubmitted,
+  });
+
+  final SupabaseEvent event;
+  final String userName;
+  final String userEmail;
+  final VoidCallback onSubmitted;
+
+  @override
+  State<_RatingDialogContent> createState() => _RatingDialogContentState();
+}
+
+class _RatingDialogContentState extends State<_RatingDialogContent> {
+  final TextEditingController _feedbackController = TextEditingController();
+  int _selectedRating = 0;
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+  bool _answeredGForms = false;
+  String? _modalError;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchExistingRating();
+  }
+
+  @override
+  void dispose() {
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchExistingRating() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('event_ratings')
+          .select('rating, feedback_text, answered_gforms')
+          .eq('event_id', widget.event.id)
+          .eq('student_email', widget.userEmail)
+          .maybeSingle();
+
+      if (!mounted) return;
+      setState(() {
+        if (data != null) {
+          _selectedRating = data['rating'] as int? ?? 0;
+          _feedbackController.text = data['feedback_text'] as String? ?? '';
+          _answeredGForms = data['answered_gforms'] as bool? ?? false;
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratingLabels = [
+      'Select rating',
+      'Poor',
+      'Fair',
+      'Good',
+      'Very Good',
+      'Excellent',
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Rate Event',
+                style: TextStyle(
+                  fontFamily: 'Figtree',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.oceanicNoir,
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded, size: 20),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                color: AppColors.nocturnalExpedition.withAlpha(120),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'How would you rate your experience at "${widget.event.eventName}"?',
+            style: const TextStyle(
+              fontFamily: 'Figtree',
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+              color: Color(0xFF5A6E77),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+
+          if (_isLoading)
+            const SizedBox(
+              height: 60,
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.oceanicNoir,
+                  strokeWidth: 3,
+                ),
+              ),
+            )
+          else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (index) {
+                final starRating = index + 1;
+                final isStarred = starRating <= _selectedRating;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedRating = starRating;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                      size: 40,
+                      color: isStarred ? Colors.amber.shade600 : AppColors.mysticMint,
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 150),
+              child: Text(
+                ratingLabels[_selectedRating],
+                key: ValueKey(_selectedRating),
+                style: TextStyle(
+                  fontFamily: 'Figtree',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _selectedRating > 0 ? AppColors.oceanicNoir : Colors.grey,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _feedbackController,
+              maxLines: 3,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Share your thoughts about this event...',
+                hintStyle: const TextStyle(fontFamily: 'Figtree', fontSize: 12, color: Colors.grey),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.mysticMint),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.oceanicNoir, width: 1.5),
+                ),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+            if (widget.event.googleFormsLink != null && widget.event.googleFormsLink!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await launchUrl(Uri.parse(widget.event.googleFormsLink!));
+                  setState(() => _answeredGForms = true);
+                },
+                icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                label: const Text('Open Feedback Form', style: TextStyle(fontFamily: 'Figtree', fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.mysticMint),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  minimumSize: const Size(double.infinity, 38),
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _isSubmitting ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.mysticMint),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'Figtree',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.nocturnalExpedition,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: (_selectedRating == 0 || _feedbackController.text.trim().isEmpty || _isSubmitting)
+                        ? null
+                        : () async {
+                            setState(() {
+                              _isSubmitting = true;
+                            });
+                            try {
+                              await Supabase.instance.client
+                                  .from('event_ratings')
+                                  .upsert({
+                                    'event_id': widget.event.id,
+                                    'student_name': widget.userName,
+                                    'student_email': widget.userEmail,
+                                    'rating': _selectedRating,
+                                    'feedback_text': _feedbackController.text.trim(),
+                                    'answered_gforms': _answeredGForms,
+                                  });
+
+                              if (!mounted) return;
+                              Navigator.pop(context);
+                              widget.onSubmitted();
+                            } catch (e) {
+                              if (!mounted) return;
+                              setState(() {
+                                _isSubmitting = false;
+                                _modalError = 'Failed to submit rating: $e';
+                              });
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.oceanicNoir,
+                      disabledBackgroundColor: AppColors.oceanicNoir.withAlpha(80),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      elevation: 0,
+                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Submit',
+                            style: TextStyle(
+                              fontFamily: 'Figtree',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            if (_modalError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _modalError!,
+                style: const TextStyle(
+                  fontFamily: 'Figtree',
+                  fontSize: 11,
+                  color: Colors.redAccent,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// A single indicator box that is empty by default and shows a checkmark
 /// when [checked] is true.
 class _TimeBox extends StatelessWidget {
@@ -933,13 +1185,16 @@ class _TimeBox extends StatelessWidget {
       width: 34,
       height: 20,
       decoration: BoxDecoration(
-        color: checked ? AppColors.nocturnalExpedition : Colors.transparent,
-        border: Border.all(color: AppColors.nocturnalExpedition, width: 1),
-        borderRadius: BorderRadius.circular(3),
+        color: checked ? const Color(0xFF27AE60) : Colors.transparent,
+        border: Border.all(
+          color: checked ? const Color(0xFF27AE60) : Colors.redAccent.withAlpha(160),
+          width: 1.2,
+        ),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: checked
           ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
-          : null,
+          : const Icon(Icons.close_rounded, color: Colors.redAccent, size: 14),
     );
   }
 }

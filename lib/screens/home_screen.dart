@@ -30,7 +30,13 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, String>> _dbCarouselItems = [];
 
   final PageController _dualCardController = PageController();
+  Timer? _dualCardTimer;
   int _dualCardPage = 0;
+
+  // ── Today's events card ──────────────────────────────────────────────────
+  final PageController _todayEventsController = PageController();
+  List<Map<String, dynamic>> _todayEvents = [];
+  bool _todayEventsLoading = true;
 
   final List<Map<String, String>> _placeholderCarouselItems = [
     {
@@ -76,14 +82,18 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchCarouselItems();
     _subscribeToCarousel();
     _startCarouselTimer();
+    _startDualCardTimer();
+    _fetchTodaysEvents();
   }
 
   @override
   void dispose() {
     _carouselChannel?.unsubscribe();
     _carouselTimer?.cancel();
+    _dualCardTimer?.cancel();
     _carouselController.dispose();
     _dualCardController.dispose();
+    _todayEventsController.dispose();
     AttendeeService().removeListener(_onAttendeeUpdate);
     UserProfileService().removeListener(_onProfileUpdate);
     super.dispose();
@@ -132,6 +142,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _fetchTodaysEvents() async {
+    try {
+      final today = DateTime.now();
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final data = await Supabase.instance.client
+          .from('events')
+          .select(
+              'id, eventName, location, startTime, endTime, morningIn, morningOut, afternoonIn, afternoonOut, morningInTime, morningOutTime, afternoonInTime, afternoonOutTime, isCompulsory, providePoints, pointsAwarded')
+          .eq('date', todayStr)
+          .order('startTime', ascending: true);
+      if (!mounted) return;
+      setState(() {
+        _todayEvents = List<Map<String, dynamic>>.from(data);
+        _todayEventsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _todayEventsLoading = false);
+    }
+  }
+
   Color? _parseHexColor(String hexStr) {
     try {
       var hex = hexStr.replaceAll('#', '');
@@ -153,6 +185,19 @@ class _HomeScreenState extends State<HomeScreen> {
       _carouselPage = (_carouselPage + 1) % items.length;
       _carouselController.animateToPage(
         _carouselPage,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  void _startDualCardTimer() {
+    _dualCardTimer?.cancel();
+    _dualCardTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (!mounted) return;
+      _dualCardPage = (_dualCardPage + 1) % 2;
+      _dualCardController.animateToPage(
+        _dualCardPage,
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeInOutCubic,
       );
@@ -183,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildDualInfoCard(),
-                      _buildViewQrCard(),
+                      _buildTodayEventsCard(),
                       const SizedBox(height: 28),
                       _buildSectionHeader(),
                       const SizedBox(height: 12),
@@ -465,8 +510,235 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── View QR Code card ────────────────────────────────────────────────────
-  Widget _buildViewQrCard() {
+  // ── Today's Events card ───────────────────────────────────────────────────
+  Widget _buildTodayEventsCard() {
+    // Loading state
+    if (_todayEventsLoading) {
+      return Container(
+        height: 110,
+        decoration: BoxDecoration(
+          color: AppColors.nocturnalExpedition,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.nocturnalExpedition.withAlpha(70),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Filter to events that are currently ongoing (startTime <= now <= endTime)
+    TimeOfDay parseHHMM(String s) {
+      final parts = s.split(':');
+      if (parts.length < 2) return const TimeOfDay(hour: 0, minute: 0);
+      return TimeOfDay(
+        hour: int.tryParse(parts[0]) ?? 0,
+        minute: int.tryParse(parts[1]) ?? 0,
+      );
+    }
+
+    final now = TimeOfDay.now();
+    final nowMins = now.hour * 60 + now.minute;
+
+    final ongoingEvents = _todayEvents.where((ev) {
+      final start = parseHHMM(ev['startTime'] as String? ?? '');
+      final end = parseHHMM(ev['endTime'] as String? ?? '');
+      final startMins = start.hour * 60 + start.minute;
+      final endMins = end.hour * 60 + end.minute;
+      return nowMins >= startMins && nowMins <= endMins;
+    }).toList();
+
+    // No currently ongoing events — fall back to the QR code card
+    if (ongoingEvents.isEmpty) {
+      return _buildQrCodeCard();
+    }
+
+    // One or more events ongoing right now — PageView
+    final totalPages = ongoingEvents.length;
+    return SizedBox(
+      height: 122,
+      child: PageView.builder(
+        controller: _todayEventsController,
+        itemCount: totalPages,
+        itemBuilder: (context, i) {
+          final ev = ongoingEvents[i];
+          final name = ev['eventName'] as String? ?? '';
+          final location = ev['location'] as String? ?? '';
+          final startTime = ev['startTime'] as String? ?? '';
+          final endTime = ev['endTime'] as String? ?? '';
+          final isCompulsory = ev['isCompulsory'] as bool? ?? false;
+          final providePoints = ev['providePoints'] as bool? ?? false;
+          final pointsAwarded = (ev['pointsAwarded'] as num?)?.toInt() ?? 0;
+
+          // Build check-in window text from individual slot times
+          final morningIn = ev['morningIn'] as bool? ?? false;
+          final morningOut = ev['morningOut'] as bool? ?? false;
+          final afternoonIn = ev['afternoonIn'] as bool? ?? false;
+          final afternoonOut = ev['afternoonOut'] as bool? ?? false;
+
+          final slots = <String>[];
+          if (morningIn || morningOut) slots.add('Morning');
+          if (afternoonIn || afternoonOut) slots.add('Afternoon');
+          final sessionText = slots.isEmpty ? '' : slots.join(' & ');
+
+          return Padding(
+            padding: EdgeInsets.only(
+              right: i < totalPages - 1 ? 12 : 0,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.nocturnalExpedition, AppColors.oceanicNoir],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.nocturnalExpedition.withAlpha(70),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: widget.onViewQrTap,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Top row: icon + event name + page dots
+                        Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(22),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: const Icon(
+                                Icons.today_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Label row: "Today's Event" + badges inline
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Today\'s Event',
+                                        style: TextStyle(
+                                          fontFamily: 'Figtree',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFFAEC8CC),
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      if (isCompulsory)
+                                        _smallBadge('Compulsory', Colors.red.shade300, Colors.red.withAlpha(50))
+                                      else
+                                        _smallBadge('Voluntary', Colors.grey.shade400, Colors.grey.withAlpha(40)),
+                                      if (providePoints && pointsAwarded > 0) ...[  
+                                        const SizedBox(width: 4),
+                                        _smallBadge('+$pointsAwarded pts', Colors.amber.shade300, Colors.amber.withAlpha(50)),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontFamily: 'Figtree',
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Page indicator dots
+                            if (totalPages > 1)
+                              Row(
+                                children: List.generate(totalPages, (dot) {
+                                  return Container(
+                                    width: dot == i ? 16 : 6,
+                                    height: 6,
+                                    margin: const EdgeInsets.only(left: 4),
+                                    decoration: BoxDecoration(
+                                      color: dot == i
+                                          ? Colors.white
+                                          : Colors.white.withAlpha(60),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  );
+                                }),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Bottom row: location chip + time chip + badges
+                        Row(
+                          children: [
+                            // Location
+                            _chip(
+                              Icons.location_on_rounded,
+                              location.isNotEmpty ? location : 'TBA',
+                            ),
+                            const SizedBox(width: 8),
+                            // Time
+                            _chip(
+                              Icons.access_time_rounded,
+                              '$startTime – $endTime',
+                            ),
+                            const SizedBox(width: 8),
+                            // Session slots
+                            if (sessionText.isNotEmpty)
+                              _chip(Icons.wb_sunny_rounded, sessionText),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildQrCodeCard() {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.nocturnalExpedition,
@@ -489,7 +761,6 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
             child: Row(
               children: [
-                // Icon box
                 Container(
                   width: 52,
                   height: 52,
@@ -539,6 +810,52 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _smallBadge(String label, Color borderColor, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: borderColor, width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Figtree',
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(22),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: const Color(0xFFAEC8CC)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Figtree',
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFFAEC8CC),
+            ),
+          ),
+        ],
       ),
     );
   }

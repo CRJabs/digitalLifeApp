@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
@@ -84,7 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _toggleEdit() => setState(() => _isEditing = !_isEditing);
 
   Future<void> _saveChanges() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     if (_selectedYear == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +95,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       await UserProfileService().updateProfile(
-        uid: uid,
         newName: _nameCtrl.text.trim(),
         newEmail: _emailCtrl.text.trim(),
         newPhone: _phoneCtrl.text.trim(),
@@ -123,7 +121,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _signOut() async {
     try {
       UserProfileService().clearProfile();
-      await FirebaseAuth.instance.signOut();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -141,7 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showFeedbackModal() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -524,13 +521,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               if (!_isEditing) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 155),
-                  child: Image.asset(
-                    'assets/credits.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
+                // Padding(
+                //   padding: const EdgeInsets.fromLTRB(20, 0, 20, 155),
+                //   child: Image.asset('assets/credits.png', fit: BoxFit.contain),
+                // ),
               ],
             ],
           ),

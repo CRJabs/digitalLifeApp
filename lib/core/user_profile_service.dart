@@ -1,29 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
-import 'dart:io';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../firebase_options.dart';
 import 'attendee_service.dart';
 import 'notification_service.dart';
 
 /// Singleton profile service that extends ChangeNotifier to make user data
 /// updates reactive.
 ///
-/// Profile data is persisted in Firestore via the **REST API** (not the
-/// cloud_firestore SDK) so that it works correctly on Windows, where the
-/// Firebase C++ SDK has a known bug that prevents it from sharing the auth
-/// token with the Firestore module.
+/// Profile data is persisted in Supabase Auth and database.
 class UserProfileService extends ChangeNotifier {
   static final UserProfileService _instance = UserProfileService._internal();
   factory UserProfileService() => _instance;
   UserProfileService._internal();
 
-  // ── Profile fields (populated from Firestore after login) ────────────────
+  // ── Profile fields (populated from Supabase after login) ────────────────
   String name = '';
   String email = '';
   String phone = '';
@@ -34,51 +27,11 @@ class UserProfileService extends ChangeNotifier {
   Timer? _rotationTimer;
   DateTime? _lastNotifiedDate;
 
-  // ── Firestore REST API constants ──────────────────────────────────────────
-  static const String _projectId = 'digital-life-app-f82f9';
-  static const String _baseUrl =
-      'https://firestore.googleapis.com/v1/projects/$_projectId/databases/(default)/documents';
-
-  /// Returns the Firestore REST URL for a given user document.
-  String _docUrl(String uid) => '$_baseUrl/users/$uid';
-
-  File? _getLocalFile(String uid) {
-    if (kIsWeb) return null;
-    try {
-      String path;
-      if (Platform.isWindows) {
-        final appData = Platform.environment['APPDATA'] ?? '.';
-        path = '$appData/DigitalLifeApp';
-      } else if (Platform.isMacOS || Platform.isLinux) {
-        final home = Platform.environment['HOME'] ?? '.';
-        path = '$home/.digital_life_app';
-      } else if (Platform.isAndroid) {
-        // On Android, the working directory is the app's private data dir.
-        // Fall back to relative path — it resolves inside the app sandbox.
-        path = '.';
-      } else if (Platform.isIOS) {
-        // Use the iOS Documents directory accessible to the sandbox.
-        final homeDir = Platform.environment['HOME'] ?? '.';
-        path = '$homeDir/Documents';
-      } else {
-        path = '.';
-      }
-      final dir = Directory(path);
-      if (!dir.existsSync()) {
-        dir.createSync(recursive: true);
-      }
-      return File('${dir.path}/profile_$uid.json');
-    } catch (e) {
-      dev.log('UserProfileService — failed to get local file: $e');
-      return null;
-    }
-  }
-
   Future<void> _loadLocal(String uid) async {
-    final file = _getLocalFile(uid);
-    if (file == null || !file.existsSync()) return;
     try {
-      final content = await file.readAsString();
+      final prefs = await SharedPreferences.getInstance();
+      final content = prefs.getString('profile_$uid');
+      if (content == null) return;
       final data = jsonDecode(content) as Map<String, dynamic>;
       name = data['name'] ?? '';
       email = data['email'] ?? '';
@@ -93,8 +46,6 @@ class UserProfileService extends ChangeNotifier {
   }
 
   Future<void> _saveLocal(String uid) async {
-    final file = _getLocalFile(uid);
-    if (file == null) return;
     try {
       final data = {
         'name': name,
@@ -104,116 +55,48 @@ class UserProfileService extends ChangeNotifier {
         'program': program,
         'yearLevel': yearLevel,
       };
-      await file.writeAsString(jsonEncode(data));
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile_$uid', jsonEncode(data));
       dev.log('UserProfileService — saved profile locally for uid: $uid');
     } catch (e) {
       dev.log('UserProfileService — failed to save profile locally: $e');
     }
   }
 
-  /// Gets a fresh ID token for the currently signed-in user.
-  Future<String?> _getIdToken() async {
-    try {
-      return await FirebaseAuth.instance.currentUser?.getIdToken(true);
-    } catch (e) {
-      dev.log('UserProfileService — getIdToken failed: $e');
-      return null;
-    }
-  }
-
-  // ── Firestore field encoding / decoding helpers ───────────────────────────
-
-  /// Encodes a map of String values into Firestore REST "fields" format.
-  Map<String, dynamic> _encodeFields(Map<String, String> data) {
-    return data
-        .map((key, value) => MapEntry(key, {'stringValue': value}));
-  }
-
-  /// Decodes a Firestore REST response "fields" map into plain String values.
-  Map<String, String> _decodeFields(Map<String, dynamic> fields) {
-    return fields.map(
-      (key, value) => MapEntry(
-        key,
-        (value as Map<String, dynamic>)['stringValue'] as String? ?? '',
-      ),
-    );
-  }
-
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /// Exchanges the Firebase ID token for a Supabase custom JWT via the Edge Function
-  /// and sets the Supabase client session.
-  Future<void> exchangeFirebaseToken(String firebaseToken) async {
-    try {
-      final response = await http.post(
-        Uri.parse('https://fsczvbsfhuenrzwxtgyq.supabase.co/functions/v1/firebase-token-exchange'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'firebaseToken': firebaseToken}),
-      );
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        final supabaseToken = body['access_token'];
-        await Supabase.instance.client.auth.setSession(supabaseToken);
-        dev.log('UserProfileService — Token exchanged, Supabase authenticated successfully.');
-      } else {
-        dev.log('UserProfileService — Token exchange failed: Status ${response.statusCode}, Body: ${response.body}');
-        throw Exception('Supabase token exchange returned status ${response.statusCode}');
-      }
-    } catch (e) {
-      dev.log('UserProfileService — Error during token exchange: $e');
-      rethrow;
-    }
-  }
-
-  /// Loads the user's profile from Firestore via REST and notifies listeners.
-  Future<void> loadFromFirestore(String uid) async {
-    // Load local cache first so UI responds instantly.
-    await _loadLocal(uid);
-    notifyListeners();
-
-    final token = await _getIdToken();
-    if (token == null) {
-      dev.log('loadFromFirestore — no auth token, skipping load');
+  /// Loads the user's profile from Supabase and notifies listeners.
+  Future<void> loadProfile() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) {
+      dev.log('loadProfile — no auth user, skipping load');
       notifyListeners();
       return;
     }
 
-    // Exchange Firebase token for Supabase session token
-    try {
-      await exchangeFirebaseToken(token);
-    } catch (e) {
-      dev.log('loadFromFirestore — token exchange error: $e');
-    }
+    // Load local cache first so UI responds instantly.
+    await _loadLocal(uid);
+    notifyListeners();
 
     try {
-      final apiKey = DefaultFirebaseOptions.currentPlatform.apiKey;
-      final response = await http.get(
-        Uri.parse('${_docUrl(uid)}?key=$apiKey'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final row = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('uid', uid)
+          .maybeSingle();
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        final fields = body['fields'] as Map<String, dynamic>?;
-        if (fields != null) {
-          final data = _decodeFields(fields);
-          name = data['name'] ?? '';
-          email = data['email'] ?? '';
-          phone = data['phone'] ?? '';
-          department = data['department'] ?? '';
-          program = data['program'] ?? '';
-          yearLevel = data['yearLevel'] ?? '';
-          dev.log('loadFromFirestore — loaded profile for uid: $uid');
-          await _saveLocal(uid);
-        }
-      } else if (response.statusCode == 404) {
-        dev.log('loadFromFirestore — no document found for uid: $uid');
-      } else {
-        dev.log('loadFromFirestore — HTTP ${response.statusCode}: ${response.body}');
+      if (row != null) {
+        name = row['name'] ?? '';
+        email = row['email'] ?? '';
+        phone = row['phone'] ?? '';
+        department = row['department'] ?? '';
+        program = row['program'] ?? '';
+        yearLevel = row['year_level'] ?? '';
+        dev.log('UserProfileService — loaded profile from Supabase for uid: $uid');
+        await _saveLocal(uid);
       }
     } catch (e) {
-      dev.log('loadFromFirestore — error: $e');
+      dev.log('UserProfileService — loadProfile error: $e');
     }
 
     notifyListeners();
@@ -224,60 +107,8 @@ class UserProfileService extends ChangeNotifier {
     }
   }
 
-  /// Writes the current profile fields to Firestore via REST.
-  Future<void> saveToFirestore(String uid) async {
-    // Persist changes locally first to guarantee saving even if offline/Firestore error.
-    await _saveLocal(uid);
-
-    final token = await _getIdToken();
-    if (token == null) {
-      dev.log('saveToFirestore — no auth token, aborting');
-      return;
-    }
-
-    // PATCH with updateMask ensures we only write these specific fields.
-    final fields = _encodeFields({
-      'name': name,
-      'email': email,
-      'phone': phone,
-      'department': department,
-      'program': program,
-      'yearLevel': yearLevel,
-    });
-
-    final updateMask = fields.keys
-        .map((k) => 'updateMask.fieldPaths=$k')
-        .join('&');
-
-    final apiKey = DefaultFirebaseOptions.currentPlatform.apiKey;
-    final url = Uri.parse('${_docUrl(uid)}?key=$apiKey&$updateMask');
-
-    try {
-      final response = await http.patch(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'name': 'projects/$_projectId/databases/(default)/documents/users/$uid',
-          'fields': fields,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        dev.log('saveToFirestore — saved profile to Firestore for uid: $uid');
-      } else {
-        dev.log('saveToFirestore — Firestore REST save returned ${response.statusCode}: ${response.body}');
-      }
-    } catch (e) {
-      dev.log('saveToFirestore — Firestore REST save error: $e');
-    }
-  }
-
-  /// Updates the in-memory profile and persists it to Firestore.
+  /// Updates the in-memory profile and persists it to Supabase.
   Future<void> updateProfile({
-    required String uid,
     required String newName,
     required String newEmail,
     required String newPhone,
@@ -292,63 +123,52 @@ class UserProfileService extends ChangeNotifier {
     program = newProgram;
     yearLevel = newYearLevel;
     notifyListeners();
-    await saveToFirestore(uid);
-    await saveToSupabase(uid);
+    await saveToSupabase();
   }
 
   // ── Supabase integration ──────────────────────────────────────────────────
 
-  /// Returns true if this Firebase UID has no row in the Supabase users table,
+  /// Returns true if this Supabase User ID has no row or an incomplete row in the users table,
   /// meaning the user has not yet completed their registration profile.
-  Future<bool> checkIsFirstLogin(String uid) async {
-    final result = await Supabase.instance.client
-        .from('users')
-        .select('id')
-        .eq('uid', uid)
-        .maybeSingle();
-    return result == null;
-  }
+  Future<bool> checkIsFirstLogin() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return true;
 
-  /// Saves the current timestamp to the local cache file as the last login time.
-  Future<void> saveSessionTimestamp(String uid) async {
-    final file = _getLocalFile(uid);
-    if (file == null) return;
     try {
-      Map<String, dynamic> data = {};
-      if (file.existsSync()) {
-        final content = await file.readAsString();
-        data = jsonDecode(content) as Map<String, dynamic>;
-      }
-      data['lastLoginAt'] = DateTime.now().millisecondsSinceEpoch;
-      await file.writeAsString(jsonEncode(data));
-      dev.log('UserProfileService — saved lastLoginAt for uid: $uid');
+      final result = await Supabase.instance.client
+          .from('users')
+          .select('name')
+          .eq('uid', uid)
+          .maybeSingle();
+
+      if (result == null) return true;
+      final storedName = result['name'] as String?;
+      return storedName == null || storedName.trim().isEmpty;
     } catch (e) {
-      dev.log('UserProfileService — failed to save session timestamp: $e');
+      dev.log('UserProfileService — checkIsFirstLogin error: $e');
+      return true;
     }
   }
 
-  /// Checks if the cached last login timestamp is older than 7 days.
-  Future<bool> isSessionExpired(String uid) async {
-    final file = _getLocalFile(uid);
-    if (file == null || !file.existsSync()) return false;
-    try {
-      final content = await file.readAsString();
-      final data = jsonDecode(content) as Map<String, dynamic>;
-      final lastLoginAt = data['lastLoginAt'] as int?;
-      if (lastLoginAt == null) return false;
-      
-      final loginTime = DateTime.fromMillisecondsSinceEpoch(lastLoginAt);
-      final difference = DateTime.now().difference(loginTime);
-      return difference.inDays >= 7;
-    } catch (e) {
-      dev.log('UserProfileService — failed to check session expiry: $e');
-      return false;
-    }
+  /// Checks if the current Supabase session is expired.
+  Future<bool> isSessionExpired() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) return true;
+    return session.isExpired;
   }
 
   /// Upserts the current profile fields to the Supabase users table.
   /// Throws on failure so callers can surface the error.
-  Future<void> saveToSupabase(String uid) async {
+  Future<void> saveToSupabase() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) {
+      dev.log('saveToSupabase — no auth user, aborting');
+      return;
+    }
+
+    // Save locally first
+    await _saveLocal(uid);
+
     await Supabase.instance.client.from('users').upsert(
       {
         'uid': uid,

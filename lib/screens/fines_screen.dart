@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_date_utils.dart';
@@ -16,22 +17,88 @@ class FinesScreen extends StatefulWidget {
 
 class _FinesScreenState extends State<FinesScreen> {
   final PageController _finesCardController = PageController();
+  Timer? _finesCardTimer;
   int _finesCardPage = 0;
 
   @override
   void initState() {
     super.initState();
     AttendeeService().addListener(_onServiceUpdate);
+    _startFinesCardTimer();
   }
 
   @override
   void dispose() {
     AttendeeService().removeListener(_onServiceUpdate);
+    _finesCardTimer?.cancel();
     _finesCardController.dispose();
     super.dispose();
   }
 
   void _onServiceUpdate() => setState(() {});
+
+  void _startFinesCardTimer() {
+    _finesCardTimer?.cancel();
+    _finesCardTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (!mounted) return;
+      _finesCardPage = (_finesCardPage + 1) % 2;
+      _finesCardController.animateToPage(
+        _finesCardPage,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  Widget _buildEventTags({required bool isCompulsory, required int torchbearerPoints}) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: isCompulsory ? Colors.red.shade50 : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isCompulsory ? Colors.red.shade200 : Colors.grey.shade300,
+              width: 0.8,
+            ),
+          ),
+          child: Text(
+            isCompulsory ? 'Compulsory' : 'Voluntary',
+            style: TextStyle(
+              fontFamily: 'Figtree',
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: isCompulsory ? Colors.red.shade700 : Colors.grey.shade700,
+            ),
+          ),
+        ),
+        if (torchbearerPoints > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: Colors.amber.shade200,
+                width: 0.8,
+              ),
+            ),
+            child: Text(
+              '+$torchbearerPoints pts',
+              style: TextStyle(
+                fontFamily: 'Figtree',
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: Colors.amber.shade800,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
 
   @override
@@ -165,7 +232,7 @@ class _FinesScreenState extends State<FinesScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '₱25.00 fine per missing attendance',
+                        '₱50.00 fine per missing attendance',
                         style: TextStyle(
                           fontFamily: 'Figtree',
                           fontSize: 10,
@@ -279,6 +346,11 @@ class _FinesScreenState extends State<FinesScreen> {
                         color: AppColors.nocturnalExpedition,
                         fontSize: 11,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildEventTags(
+                      isCompulsory: info.isCompulsory,
+                      torchbearerPoints: (info.providePoints && info.pointsAwarded > 0) ? info.pointsAwarded : 0,
                     ),
                   ],
                 ),

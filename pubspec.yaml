@@ -34,9 +34,6 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   # cupertino_icons: ^1.0.8  # Unused — app uses Material icons throughout
-  firebase_core: ^4.10.0
-  firebase_auth: ^6.5.2
-  firebase_messaging: ^16.0.2
   flutter_local_notifications: ^18.0.0
   url_launcher: ^6.3.0
   http: ^1.2.2
@@ -46,6 +43,7 @@ dependencies:
 
 dev_dependencies:
   msix: ^3.16.1
+  flutter_launcher_icons: ^0.13.1
   flutter_test:
     sdk: flutter
 
@@ -93,4 +91,9 @@ msix_config:
   identity_name: com.ub.digitallife
   publisher: CN=UniversityOfBohol, O=UB, C=PH
   logo_path: assets/appLogo.png
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/appLogo.png"
 

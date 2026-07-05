@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/attendee_service.dart';
@@ -10,9 +10,9 @@ import 'main_shell.dart';
 ///
 /// Shown once — immediately after sign-in — when the user has no row
 /// in the Supabase [users] table. Collects profile data, saves it to
-/// both Firestore and Supabase, then routes to [MainShell].
+/// Supabase, then routes to [MainShell].
 class RegistrationScreen extends StatefulWidget {
-  /// The Firebase Auth email, pre-filled and locked in the email field.
+  /// The Supabase Auth email, pre-filled and locked in the email field.
   final String email;
 
   const RegistrationScreen({super.key, required this.email});
@@ -64,14 +64,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     setState(() => _loading = true);
 
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid == null) throw Exception('Not signed in');
 
       final profile = UserProfileService();
 
-      // 1. Save to Firestore + local cache
+      // 1. Save to Supabase + local cache
       await profile.updateProfile(
-        uid: uid,
         newName: _nameCtrl.text.trim(),
         newEmail: widget.email,
         newPhone: _phoneCtrl.text.trim(),
@@ -81,7 +80,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
 
       // 2. Save to Supabase users table (updateProfile already calls this)
-      //    Ensure email field is from Firebase Auth (read-only in the form)
+      //    Ensure email field is from Supabase Auth (read-only in the form)
 
       // 3. Start attendee listening keyed by email
       await AttendeeService().startListening(widget.email);

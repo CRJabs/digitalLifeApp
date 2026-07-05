@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/security_service.dart';
@@ -40,8 +40,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         return;
       }
 
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailCtrl.text.trim(),
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        _emailCtrl.text.trim(),
       );
 
       await SecurityService().recordPasswordResetRequest();
@@ -52,7 +52,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Password reset link sent! Check your inbox to redirect to the LIFE Website reset form.',
+            'Password reset link sent! Check your inbox.',
             style: TextStyle(fontFamily: 'Figtree', fontSize: 13),
           ),
           backgroundColor: AppColors.oceanicNoir,
@@ -61,22 +61,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
 
       Navigator.of(context).pop();
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
       
-      String message = 'An error occurred. Please try again.';
-      if (e.code == 'user-not-found') {
-        message = 'No user found with this email.';
-      } else if (e.code == 'invalid-email') {
-        message = 'The email address is invalid.';
-      } else if (e.message != null) {
-        message = e.message!;
-      }
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(e.message),
           backgroundColor: Colors.redAccent,
         ),
       );

@@ -61,12 +61,18 @@ class MissingCheckInfo {
   final String date;
   final List<String> missingSlots;
   final double totalFine;
+  final bool isCompulsory;
+  final bool providePoints;
+  final int pointsAwarded;
 
   MissingCheckInfo({
     required this.eventName,
     required this.date,
     required this.missingSlots,
     required this.totalFine,
+    required this.isCompulsory,
+    required this.providePoints,
+    required this.pointsAwarded,
   });
 }
 
@@ -348,12 +354,25 @@ class AttendeeService extends ChangeNotifier {
       }
 
       if (missingSlots.isNotEmpty) {
-        final hasFeedback = completedFeedbackEventIds.contains(eventId);
+        final isCompulsory = eventJson['isCompulsory'] as bool? ?? false;
+        final providePoints = eventJson['providePoints'] as bool? ?? false;
+        
+        int parsePoints(dynamic val) {
+          if (val == null) return 0;
+          if (val is num) return val.toInt();
+          if (val is String) return int.tryParse(val) ?? double.tryParse(val)?.toInt() ?? 0;
+          return 0;
+        }
+        final pointsAwarded = parsePoints(eventJson['pointsAwarded']);
+
         list.add(MissingCheckInfo(
           eventName: eventName,
           date: eventDateStr,
           missingSlots: missingSlots,
-          totalFine: hasFeedback ? 0.0 : missingSlots.length * 25.0,
+          totalFine: isCompulsory ? (missingSlots.length * 50.0) : 0.0,
+          isCompulsory: isCompulsory,
+          providePoints: providePoints,
+          pointsAwarded: pointsAwarded,
         ));
       }
     }

@@ -1,5 +1,5 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/user_profile_service.dart';
@@ -31,31 +31,43 @@ class _SplashScreenState extends State<SplashScreen> {
     Widget nextScreen;
 
     try {
-      // 1. Get current auth state (resolve Firebase's cached user)
-      final user = await FirebaseAuth.instance.authStateChanges().first;
+      // Get current Supabase session
+      final session = Supabase.instance.client.auth.currentSession;
 
-      if (user == null) {
+      if (session == null || session.isExpired) {
         nextScreen = const LoginScreen();
       } else {
-        // 2. Check if the session is expired
-        final isExpired = await UserProfileService().isSessionExpired(user.uid);
-        if (isExpired) {
-          await FirebaseAuth.instance.signOut();
-          UserProfileService().clearProfile();
-          nextScreen = const LoginScreen();
-        } else {
-          // 3. Load user profile from Firestore and check if it's first-time login
-          await UserProfileService().loadFromFirestore(user.uid);
-          final isFirst = await UserProfileService().checkIsFirstLogin(user.uid);
-          if (isFirst) {
-            nextScreen = RegistrationScreen(email: user.email ?? '');
-          } else {
-            nextScreen = const MainShell();
+        // Load user profile from Supabase with a timeout to prevent hanging
+        await UserProfileService().loadProfile().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            debugPrint('Splash: loadProfile timed out, using local cache');
+          },
+        );
+
+        // Check if local cache has profile (if name is not empty, they are not a first-time user)
+        bool isFirst = false;
+        if (UserProfileService().name.isEmpty) {
+          try {
+            isFirst = await UserProfileService()
+                .checkIsFirstLogin()
+                .timeout(const Duration(seconds: 3));
+          } catch (e) {
+            debugPrint('Splash: checkIsFirstLogin failed or timed out: $e');
+            // Fallback: If offline and cache is empty, we assume they need to register
+            isFirst = true;
           }
+        }
+
+        if (isFirst) {
+          nextScreen = RegistrationScreen(email: session.user.email ?? '');
+        } else {
+          nextScreen = const MainShell();
         }
       }
     } catch (e) {
-      // If anything fails (e.g. network timeout), fallback to the login screen
+      // If anything fails, fallback to the login screen
+      debugPrint('Splash: Error initializing app: $e');
       nextScreen = const LoginScreen();
     }
 

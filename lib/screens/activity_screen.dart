@@ -22,6 +22,9 @@ class SupabaseEvent {
   final bool afternoonIn;
   final bool afternoonOut;
   final String? googleFormsLink;
+  final bool isCompulsory;
+  final bool providePoints;
+  final int pointsAwarded;
 
   const SupabaseEvent({
     required this.id,
@@ -36,9 +39,19 @@ class SupabaseEvent {
     required this.afternoonIn,
     required this.afternoonOut,
     this.googleFormsLink,
+    required this.isCompulsory,
+    required this.providePoints,
+    required this.pointsAwarded,
   });
 
   factory SupabaseEvent.fromJson(Map<String, dynamic> json) {
+    int parsePoints(dynamic val) {
+      if (val == null) return 0;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? double.tryParse(val)?.toInt() ?? 0;
+      return 0;
+    }
+
     return SupabaseEvent(
       id: json['id'] as String,
       eventName: json['eventName'] as String? ?? '',
@@ -52,6 +65,9 @@ class SupabaseEvent {
       afternoonIn: json['afternoonIn'] as bool? ?? false,
       afternoonOut: json['afternoonOut'] as bool? ?? false,
       googleFormsLink: json['googleFormsLink'] as String?,
+      isCompulsory: json['isCompulsory'] as bool? ?? false,
+      providePoints: json['providePoints'] as bool? ?? false,
+      pointsAwarded: parsePoints(json['pointsAwarded']),
     );
   }
 }
@@ -190,7 +206,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       final userEmail = UserProfileService().email;
       final userName = UserProfileService().name;
-      if (userEmail != null) {
+      if (userEmail.isNotEmpty) {
         // First check if there is an existing rating for this user & event
         final existing = await Supabase.instance.client
             .from('event_ratings')
@@ -199,13 +215,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
             .eq('student_email', userEmail)
             .maybeSingle();
 
-        final ratingData = existing as Map<String, dynamic>?;
+        final ratingData = existing;
 
         await Supabase.instance.client
             .from('event_ratings')
             .upsert({
               'event_id': eventId,
-              'student_name': userName ?? 'Anonymous',
+              'student_name': userName.isEmpty ? 'Anonymous' : userName,
               'student_email': userEmail,
               'rating': ratingData != null ? ratingData['rating'] as int? ?? 0 : 0,
               'feedback_text': ratingData != null ? ratingData['feedback_text'] as String? ?? '' : '',
@@ -570,7 +586,53 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  Widget _buildFeedbackBadge(bool hasCheck, bool hasRated, bool isFeedbackDone) {
+  Widget _buildCompulsoryBadge(bool isCompulsory) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isCompulsory ? Colors.red.shade50 : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isCompulsory ? Colors.red.shade200 : Colors.grey.shade300,
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        isCompulsory ? 'Compulsory' : 'Voluntary',
+        style: TextStyle(
+          fontFamily: 'Figtree',
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: isCompulsory ? Colors.red.shade700 : Colors.grey.shade700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTorchbearerBadge(int points) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: Colors.amber.shade200,
+          width: 0.8,
+        ),
+      ),
+      child: Text(
+        '+$points pts',
+        style: TextStyle(
+          fontFamily: 'Figtree',
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: Colors.amber.shade800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeedbackBadgeInline(bool hasCheck, bool hasRated, bool isFeedbackDone) {
     if (!hasCheck) return const SizedBox.shrink();
 
     String label;
@@ -587,7 +649,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withAlpha(25),
@@ -653,7 +714,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         fontSize: 11,
                       ),
                     ),
-                    _buildFeedbackBadge(hasCheck, hasRated, isFeedbackDone),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _buildCompulsoryBadge(item.isCompulsory),
+                        if (item.providePoints && item.pointsAwarded > 0)
+                          _buildTorchbearerBadge(item.pointsAwarded),
+                        _buildFeedbackBadgeInline(hasCheck, hasRated, isFeedbackDone),
+                      ],
+                    ),
                   ],
                 ),
               ),

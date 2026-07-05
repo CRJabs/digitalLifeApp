@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/user_profile_service.dart';
@@ -37,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final cooldownRemaining = await SecurityService().getLoginCooldownRemaining();
+    if (!mounted) return;
     if (cooldownRemaining > 0) {
       String waitText = '$cooldownRemaining seconds';
       if (cooldownRemaining > 60) {
@@ -54,36 +55,34 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     
     try {
-      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final response = await Supabase.instance.client.auth.signInWithPassword(
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
       );
 
+      final user = response.user;
+      if (user == null) throw const AuthException('Login failed: User is null');
+
       await SecurityService().recordLoginAttempt(true);
 
-      // Load this user's profile from Firestore before routing.
-      await UserProfileService()
-          .loadFromFirestore(credential.user!.uid);
-
-      // Save session timestamp
-      await UserProfileService().saveSessionTimestamp(credential.user!.uid);
+      // Load this user's profile from Supabase before routing.
+      await UserProfileService().loadProfile();
 
       if (!mounted) return;
 
       // Check if the user has previously completed registration.
-      final isFirstLogin = await UserProfileService()
-          .checkIsFirstLogin(credential.user!.uid);
+      final isFirstLogin = await UserProfileService().checkIsFirstLogin();
 
       if (!mounted) return;
       setState(() => _loading = false);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => isFirstLogin
-              ? RegistrationScreen(email: credential.user!.email ?? '')
+              ? RegistrationScreen(email: user.email ?? '')
               : const MainShell(),
         ),
       );
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       await SecurityService().recordLoginAttempt(false);
       final newCooldown = await SecurityService().getLoginCooldownRemaining();
 
@@ -98,15 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
         message = 'Wrong credentials. Too many failed attempts: Login locked for $waitText.';
       } else {
-        if (e.code == 'user-not-found') {
-          message = 'No user found for that email.';
-        } else if (e.code == 'wrong-password') {
-          message = 'Wrong password provided.';
-        } else if (e.code == 'invalid-email') {
-          message = 'The email address is invalid.';
-        } else if (e.message != null) {
-          message = e.message!;
-        }
+        message = e.message;
       }
       
       ScaffoldMessenger.of(context).showSnackBar(

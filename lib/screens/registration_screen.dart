@@ -3,7 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 import '../core/attendee_service.dart';
+import '../core/session_service.dart';
 import '../core/user_profile_service.dart';
+import 'login_screen.dart';
 import 'main_shell.dart';
 
 /// First-login registration screen.
@@ -99,6 +101,44 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _backToLogin() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Go back to login?'),
+        content: const Text(
+          'Are you sure you want to go back? '
+          'You will be signed out and will need to log in again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+            ),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await SessionService().clearSessionData();
+    UserProfileService().clearProfile(); // also calls Supabase.auth.signOut()
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -295,6 +335,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                   ),
                                 )
                               : const Text('Save & Continue'),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+
+                      // ── Back to Login ─────────────────────────────────────
+                      TextButton(
+                        onPressed: _loading ? null : _backToLogin,
+                        child: const Text(
+                          'Back to Login',
+                          style: TextStyle(
+                            fontFamily: 'Figtree',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.nocturnalExpedition,
+                          ),
                         ),
                       ),
 

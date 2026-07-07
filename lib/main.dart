@@ -109,6 +109,18 @@ class LifeApp extends StatelessWidget {
           ),
         ),
       ),
+      builder: (context, child) {
+        final mediaQueryData = MediaQuery.of(context);
+        // Base screen width of 360px is typical for standard phones.
+        // Clamp scale factor to prevent extreme scaling.
+        final scale = (mediaQueryData.size.width / 360.0).clamp(0.85, 1.15);
+        return MediaQuery(
+          data: mediaQueryData.copyWith(
+            textScaler: TextScaler.linear(scale),
+          ),
+          child: child!,
+        );
+      },
       home: const SplashScreen(),
     );
   }

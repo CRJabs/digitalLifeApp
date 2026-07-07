@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SecurityService {
   factory SecurityService() => _instance;
@@ -104,5 +105,20 @@ class SecurityService {
   Future<int> getLoginAttempts() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_keyLoginAttempts) ?? 0;
+  }
+
+  /// Clears all rate-limiting state for a fresh session.
+  ///
+  /// Call this when the login screen mounts and no Supabase session is active,
+  /// so that a previous user's cooldown on the same device does not block the
+  /// next user from logging in.
+  Future<void> resetForNewSession() async {
+    final hasActiveSession =
+        Supabase.instance.client.auth.currentSession != null;
+    if (hasActiveSession) return; // only reset when no one is logged in
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyLoginAttempts);
+    await prefs.remove(_keyCooldownUntil);
   }
 }

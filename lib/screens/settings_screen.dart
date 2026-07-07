@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
+import '../core/session_service.dart';
 import '../core/user_profile_service.dart';
 import 'login_screen.dart';
 
@@ -120,6 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _signOut() async {
     try {
+      await SessionService().clearSessionData();
       UserProfileService().clearProfile();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -245,8 +247,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onPressed: isSubmitting
                                 ? null
                                 : () async {
-                                    if (!formKey.currentState!.validate())
+                                    if (!formKey.currentState!.validate()) {
                                       return;
+                                    }
                                     setModalState(() {
                                       isSubmitting = true;
                                     });

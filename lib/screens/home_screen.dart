@@ -30,7 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, String>> _dbCarouselItems = [];
 
   final PageController _dualCardController = PageController();
-  Timer? _dualCardTimer;
   int _dualCardPage = 0;
 
   // ── Today's events card ──────────────────────────────────────────────────
@@ -73,6 +72,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   RealtimeChannel? _carouselChannel;
 
+  RealtimeChannel? _eventsChannel;
+
   @override
   void initState() {
     super.initState();
@@ -81,16 +82,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _carouselController = PageController(initialPage: 0);
     _fetchCarouselItems();
     _subscribeToCarousel();
+    _subscribeToEvents();
     _startCarouselTimer();
-    _startDualCardTimer();
     _fetchTodaysEvents();
   }
 
   @override
   void dispose() {
     _carouselChannel?.unsubscribe();
+    _eventsChannel?.unsubscribe();
     _carouselTimer?.cancel();
-    _dualCardTimer?.cancel();
     _carouselController.dispose();
     _dualCardController.dispose();
     _todayEventsController.dispose();
@@ -107,6 +108,18 @@ class _HomeScreenState extends State<HomeScreen> {
           schema: 'public',
           table: 'carousel_items',
           callback: (_) => _fetchCarouselItems(),
+        )
+        .subscribe();
+  }
+
+  void _subscribeToEvents() {
+    _eventsChannel = Supabase.instance.client
+        .channel('events:all')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'events',
+          callback: (_) => _fetchTodaysEvents(),
         )
         .subscribe();
   }
@@ -191,18 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _startDualCardTimer() {
-    _dualCardTimer?.cancel();
-    _dualCardTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-      if (!mounted) return;
-      _dualCardPage = (_dualCardPage + 1) % 2;
-      _dualCardController.animateToPage(
-        _dualCardPage,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOutCubic,
-      );
-    });
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -422,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               Text(
-                                '${points.toStringAsFixed(0)} pts',
+                                '${points.toStringAsFixed(0)} ${points.toInt() == 1 ? 'pt' : 'pts'}',
                                 style: TextStyle(
                                   fontFamily: 'Figtree',
                                   fontSize: 20,
@@ -540,7 +542,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // Filter to events that are currently ongoing (startTime <= now <= endTime)
+    // Filter: show events that haven't ended yet (both upcoming and currently ongoing).
+    // Only fully past events (endTime < now) are hidden.
     TimeOfDay parseHHMM(String s) {
       final parts = s.split(':');
       if (parts.length < 2) return const TimeOfDay(hour: 0, minute: 0);
@@ -553,28 +556,26 @@ class _HomeScreenState extends State<HomeScreen> {
     final now = TimeOfDay.now();
     final nowMins = now.hour * 60 + now.minute;
 
-    final ongoingEvents = _todayEvents.where((ev) {
-      final start = parseHHMM(ev['startTime'] as String? ?? '');
+    final todayActiveEvents = _todayEvents.where((ev) {
       final end = parseHHMM(ev['endTime'] as String? ?? '');
-      final startMins = start.hour * 60 + start.minute;
       final endMins = end.hour * 60 + end.minute;
-      return nowMins >= startMins && nowMins <= endMins;
+      return nowMins <= endMins; // upcoming or ongoing; exclude only ended events
     }).toList();
 
-    // No currently ongoing events — fall back to the QR code card
-    if (ongoingEvents.isEmpty) {
+    // No active events today — fall back to the QR code card
+    if (todayActiveEvents.isEmpty) {
       return _buildQrCodeCard();
     }
 
-    // One or more events ongoing right now — PageView
-    final totalPages = ongoingEvents.length;
+    // One or more active events today — PageView
+    final totalPages = todayActiveEvents.length;
     return SizedBox(
       height: 122,
       child: PageView.builder(
         controller: _todayEventsController,
         itemCount: totalPages,
         itemBuilder: (context, i) {
-          final ev = ongoingEvents[i];
+          final ev = todayActiveEvents[i];
           final name = ev['eventName'] as String? ?? '';
           final location = ev['location'] as String? ?? '';
           final startTime = ev['startTime'] as String? ?? '';
@@ -667,7 +668,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         _smallBadge('Voluntary', Colors.grey.shade400, Colors.grey.withAlpha(40)),
                                       if (providePoints && pointsAwarded > 0) ...[  
                                         const SizedBox(width: 4),
-                                        _smallBadge('+$pointsAwarded pts', Colors.amber.shade300, Colors.amber.withAlpha(50)),
+                                        _smallBadge('+$pointsAwarded ${pointsAwarded == 1 ? 'pt' : 'pts'}', Colors.amber.shade300, Colors.amber.withAlpha(50)),
                                       ],
                                     ],
                                   ),
@@ -718,7 +719,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             // Time
                             _chip(
                               Icons.access_time_rounded,
-                              '$startTime – $endTime',
+                              '${_format24to12(startTime)} – ${_format24to12(endTime)}',
                             ),
                             const SizedBox(width: 8),
                             // Session slots
@@ -994,13 +995,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (overlayColor != null && overlayOpacityVal > 0.0)
                             Positioned.fill(
                               child: Container(
-                                color: overlayColor.withOpacity(overlayOpacityVal),
+                                color: overlayColor.withValues(alpha: overlayOpacityVal),
                               ),
                             )
                           else if (hasBgImage)
                             Positioned.fill(
                               child: Container(
-                                color: Colors.black.withOpacity(0.35),
+                                color: Colors.black.withValues(alpha: 0.35),
                               ),
                             ),
 
@@ -1127,5 +1128,17 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }),
     );
+  }
+
+  String _format24to12(String time24) {
+    if (time24.isEmpty) return '--';
+    final parts = time24.split(':');
+    if (parts.isEmpty) return time24;
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    final ampm = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    final displayMinute = minute.toString().padLeft(2, '0');
+    return '$displayHour:$displayMinute $ampm';
   }
 }

@@ -897,10 +897,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
             userName: userName,
             userEmail: userEmail,
             onSubmitted: () async {
+              final messenger = ScaffoldMessenger.of(context);
               await AttendeeService().refreshCompletedFeedback();
               _fetchEvents();
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text(
                     'Thank you for your feedback!',
@@ -1186,7 +1187,8 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
                                   });
 
                               if (!mounted) return;
-                              Navigator.pop(context);
+                              final navigator = Navigator.of(context);
+                              navigator.pop();
                               widget.onSubmitted();
                             } catch (e) {
                               if (!mounted) return;

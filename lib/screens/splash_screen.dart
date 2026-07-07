@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
+import '../core/session_service.dart';
 import '../core/user_profile_service.dart';
 import 'login_screen.dart';
 import 'main_shell.dart';
@@ -28,45 +29,69 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _initializeApp() async {
     final startTime = DateTime.now();
-    Widget nextScreen;
+    Widget nextScreen = const LoginScreen(); // safe default
+    String? errorMessage;
 
     try {
-      // Get current Supabase session
-      final session = Supabase.instance.client.auth.currentSession;
-
-      if (session == null || session.isExpired) {
+      // ── Step 1: Run session invalidation checks ───────────────────────────
+      // Signs out automatically if build number changed, user changed, or
+      // the session has been inactive for more than 3 days.
+      final wasInvalidated =
+          await SessionService().checkAndInvalidateIfNeeded();
+      if (wasInvalidated) {
         nextScreen = const LoginScreen();
       } else {
-        // Load user profile from Supabase with a timeout to prevent hanging
-        await UserProfileService().loadProfile().timeout(
-          const Duration(seconds: 3),
-          onTimeout: () {
-            debugPrint('Splash: loadProfile timed out, using local cache');
-          },
-        );
+        // ── Step 2: Check Supabase session ──────────────────────────────────
+        final session = Supabase.instance.client.auth.currentSession;
 
-        // Check if local cache has profile (if name is not empty, they are not a first-time user)
-        bool isFirst = false;
-        if (UserProfileService().name.isEmpty) {
-          try {
-            isFirst = await UserProfileService()
-                .checkIsFirstLogin()
-                .timeout(const Duration(seconds: 3));
-          } catch (e) {
-            debugPrint('Splash: checkIsFirstLogin failed or timed out: $e');
-            // Fallback: If offline and cache is empty, we assume they need to register
-            isFirst = true;
-          }
-        }
-
-        if (isFirst) {
-          nextScreen = RegistrationScreen(email: session.user.email ?? '');
+        if (session == null || session.isExpired) {
+          nextScreen = const LoginScreen();
         } else {
-          nextScreen = const MainShell();
+          // ── Step 3: Load user profile ────────────────────────────────────
+          await UserProfileService().loadProfile().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              debugPrint('Splash: loadProfile timed out');
+            },
+          );
+
+          final hasLocalProfile = UserProfileService().name.isNotEmpty;
+
+          if (hasLocalProfile) {
+            // Returning user with cached data — proceed normally.
+            await SessionService().recordActivity();
+            nextScreen = const MainShell();
+          } else {
+            // Cache is empty; attempt a definitive first-login check.
+            bool isFirst = false;
+            try {
+              isFirst = await UserProfileService()
+                  .checkIsFirstLogin()
+                  .timeout(const Duration(seconds: 5));
+            } catch (e) {
+              // Network unavailable and no local cache — cannot verify this
+              // account. Deny entry and ask the user to reconnect.
+              debugPrint('Splash: checkIsFirstLogin failed or timed out: $e');
+              await Supabase.instance.client.auth.signOut();
+              errorMessage =
+                  'Account authentication failed. Please try again later.';
+              nextScreen = const LoginScreen();
+              isFirst = false; // skip the block below
+            }
+
+            if (errorMessage == null) {
+              if (isFirst) {
+                nextScreen =
+                    RegistrationScreen(email: session.user.email ?? '');
+              } else {
+                await SessionService().recordActivity();
+                nextScreen = const MainShell();
+              }
+            }
+          }
         }
       }
     } catch (e) {
-      // If anything fails, fallback to the login screen
       debugPrint('Splash: Error initializing app: $e');
       nextScreen = const LoginScreen();
     }
@@ -82,6 +107,17 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => nextScreen),
     );
+
+    // Show error snackbar after navigation completes, if applicable.
+    if (errorMessage != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   @override

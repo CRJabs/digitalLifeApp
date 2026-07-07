@@ -27,6 +27,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Clear any rate-limit state left by a previous user on this device.
+    SecurityService().resetForNewSession();
+  }
+
+  @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();

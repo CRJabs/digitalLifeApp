@@ -17,38 +17,24 @@ class FinesScreen extends StatefulWidget {
 
 class _FinesScreenState extends State<FinesScreen> {
   final PageController _finesCardController = PageController();
-  Timer? _finesCardTimer;
   int _finesCardPage = 0;
 
   @override
   void initState() {
     super.initState();
     AttendeeService().addListener(_onServiceUpdate);
-    _startFinesCardTimer();
   }
 
   @override
   void dispose() {
     AttendeeService().removeListener(_onServiceUpdate);
-    _finesCardTimer?.cancel();
     _finesCardController.dispose();
     super.dispose();
   }
 
   void _onServiceUpdate() => setState(() {});
 
-  void _startFinesCardTimer() {
-    _finesCardTimer?.cancel();
-    _finesCardTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-      if (!mounted) return;
-      _finesCardPage = (_finesCardPage + 1) % 2;
-      _finesCardController.animateToPage(
-        _finesCardPage,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOutCubic,
-      );
-    });
-  }
+
 
   Widget _buildEventTags({required bool isCompulsory, required int torchbearerPoints}) {
     return Wrap(
@@ -87,7 +73,7 @@ class _FinesScreenState extends State<FinesScreen> {
               ),
             ),
             child: Text(
-              '+$torchbearerPoints pts',
+              '+$torchbearerPoints ${torchbearerPoints == 1 ? 'pt' : 'pts'}',
               style: TextStyle(
                 fontFamily: 'Figtree',
                 fontSize: 9,
@@ -261,7 +247,7 @@ class _FinesScreenState extends State<FinesScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${equivalentHours.toStringAsFixed(1)} hrs',
+                        '${equivalentHours.toStringAsFixed(1)} ${equivalentHours == 1.0 ? 'hr' : 'hrs'}',
                         style: const TextStyle(
                           fontFamily: 'Figtree',
                           fontSize: 32,
@@ -355,26 +341,28 @@ class _FinesScreenState extends State<FinesScreen> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '₱${info.totalFine.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontFamily: 'Figtree',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.red.shade700,
+              if (info.isCompulsory) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '₱${info.totalFine.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontFamily: 'Figtree',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.red.shade700,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 12),

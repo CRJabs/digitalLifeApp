@@ -225,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
               // ── Scrollable body ─────────────────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 304), // Large bottom padding to scroll past floating carousel + navbar
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 304.0 + mq.padding.bottom), // Large bottom padding to scroll past floating carousel + navbar
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

@@ -460,7 +460,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       onRefresh: _fetchEvents,
       color: AppColors.nocturnalExpedition,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 120.0 + MediaQuery.of(context).padding.bottom),
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final category = categories[index];
@@ -1171,6 +1171,7 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
                     onPressed: (_selectedRating == 0 || _feedbackController.text.trim().isEmpty || _isSubmitting)
                         ? null
                         : () async {
+                            final navigator = Navigator.of(context);
                             setState(() {
                               _isSubmitting = true;
                             });
@@ -1186,9 +1187,8 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
                                     'answered_gforms': _answeredGForms,
                                   });
 
-                              if (!mounted) return;
-                              final navigator = Navigator.of(context);
                               navigator.pop();
+                              if (!mounted) return;
                               widget.onSubmitted();
                             } catch (e) {
                               if (!mounted) return;

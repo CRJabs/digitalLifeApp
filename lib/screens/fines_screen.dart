@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_date_utils.dart';
@@ -128,11 +127,11 @@ class _FinesScreenState extends State<FinesScreen> {
           // ── Scrollable Body ─────────────────────────────────────────────
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 20,
                 16,
                 20,
-                120,
+                120.0 + mq.padding.bottom,
               ), // Adjusted padding (no floating logo)
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

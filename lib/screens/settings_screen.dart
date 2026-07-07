@@ -363,7 +363,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ── Scrollable body ─────────────────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 120.0 + mq.padding.bottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [

@@ -131,7 +131,7 @@ class ScannerScreen extends StatelessWidget {
                         ),
 
                         // Bottom padding to account for floating navbar
-                        const SizedBox(height: 120),
+                        SizedBox(height: 120.0 + MediaQuery.of(context).padding.bottom),
                       ],
                     ),
                   ),

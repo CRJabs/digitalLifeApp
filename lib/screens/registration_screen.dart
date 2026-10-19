@@ -93,10 +93,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Registration failed: $e');
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Registration failed: $e'),
+        const SnackBar(
+          content: Text('Registration failed. Please check your information and try again.'),
           backgroundColor: Colors.redAccent,
         ),
       );

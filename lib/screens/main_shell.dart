@@ -68,7 +68,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               left: 0,
               right: 0,
               bottom: 0,
-              height: 142.0 + bottomPadding,
+              height: 126.0 + bottomPadding,
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
@@ -92,7 +92,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 32.0 + bottomPadding,
+            bottom: 16.0 + bottomPadding,
             child: AppBottomNav(
               currentIndex: _currentIndex,
               onTap: (i) => setState(() => _currentIndex = i),

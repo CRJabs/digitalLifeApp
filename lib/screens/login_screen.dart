@@ -116,10 +116,11 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       await SecurityService().recordLoginAttempt(false);
       if (!mounted) return;
+      debugPrint('Login unexpected error: $e');
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
+        const SnackBar(
+          content: Text('Login failed. Please check your connection and try again.'),
           backgroundColor: Colors.redAccent,
         ),
       );

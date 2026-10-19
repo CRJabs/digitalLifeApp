@@ -73,10 +73,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Forgot password unexpected error: $e');
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
+        const SnackBar(
+          content: Text('Could not send reset link. Please check your connection and try again.'),
           backgroundColor: Colors.redAccent,
         ),
       );

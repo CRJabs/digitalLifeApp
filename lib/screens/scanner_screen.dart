@@ -35,14 +35,21 @@ class ScannerScreen extends StatelessWidget {
 
                 // ── Center everything else in remaining space ─────────────
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // 128px gap between Life logo and QR card
-                        const SizedBox(height: 128),
+                  child: LayoutBuilder(
+                    builder: (context, viewportConstraints) {
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: ConstrainedBox(
+                          // Ensure content fills available height so it stays
+                          // vertically centered when shorter than the screen.
+                          constraints: BoxConstraints(
+                            minHeight: viewportConstraints.maxHeight,
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
 
                         // ── QR Code card ──────────────────────────────────
                         LayoutBuilder(
@@ -131,11 +138,15 @@ class ScannerScreen extends StatelessWidget {
                         ),
 
                         // Bottom padding to account for floating navbar
-                        SizedBox(height: 120.0 + MediaQuery.of(context).padding.bottom),
-                      ],
-                    ),
-                  ),
-                ),
+                          SizedBox(height: 104.0 + MediaQuery.of(context).padding.bottom),
+                          ],         // end Column children
+                            ),       // end Column
+                          ),         // end Center
+                        ),           // end ConstrainedBox
+                      );             // end SingleChildScrollView / return
+                    },
+                  ),                 // end LayoutBuilder
+                ),                   // end Expanded
               ],
             );
           },

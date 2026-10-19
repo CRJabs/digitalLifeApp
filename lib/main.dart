@@ -110,14 +110,33 @@ class LifeApp extends StatelessWidget {
         ),
       ),
       builder: (context, child) {
-        final mediaQueryData = MediaQuery.of(context);
-        // Base screen width of 360px is typical for standard phones.
-        // Clamp scale factor to prevent extreme scaling.
-        final scale = (mediaQueryData.size.width / 360.0).clamp(0.85, 1.15);
+        final mq = MediaQuery.of(context);
+        const double maxContentWidth = 820.0; // iPad Air portrait width
+
+        if (mq.size.width > maxContentWidth) {
+          // On desktop/wide screens: fixed text scale, content centered at 820px
+          // with white background filling the remaining space on each side.
+          return Container(
+            color: Colors.white,
+            child: Center(
+              child: SizedBox(
+                width: maxContentWidth,
+                child: MediaQuery(
+                  data: mq.copyWith(
+                    size: Size(maxContentWidth, mq.size.height),
+                    textScaler: const TextScaler.linear(1.0),
+                  ),
+                  child: child!,
+                ),
+              ),
+            ),
+          );
+        }
+
+        // On mobile/narrow screens: scale text relative to a 360px base phone width.
+        final scale = (mq.size.width / 360.0).clamp(0.85, 1.15);
         return MediaQuery(
-          data: mediaQueryData.copyWith(
-            textScaler: TextScaler.linear(scale),
-          ),
+          data: mq.copyWith(textScaler: TextScaler.linear(scale)),
           child: child!,
         );
       },

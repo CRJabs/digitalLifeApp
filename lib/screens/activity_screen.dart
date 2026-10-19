@@ -193,8 +193,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Failed to load activities: $e');
       setState(() {
-        _error = e.toString();
+        _error = 'Unable to load activities. Please check your connection and try again.';
         _isLoading = false;
       });
     }
@@ -460,7 +461,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       onRefresh: _fetchEvents,
       color: AppColors.nocturnalExpedition,
       child: ListView.builder(
-        padding: EdgeInsets.fromLTRB(16, 8, 16, 120.0 + MediaQuery.of(context).padding.bottom),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 104.0 + MediaQuery.of(context).padding.bottom),
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final category = categories[index];
@@ -888,33 +889,40 @@ class _ActivityScreenState extends State<ActivityScreen> {
       barrierDismissible: true,
       builder: (context) {
         return Dialog(
+          clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
           backgroundColor: Colors.white,
-          child: _RatingDialogContent(
-            event: event,
-            userName: userName,
-            userEmail: userEmail,
-            onSubmitted: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              await AttendeeService().refreshCompletedFeedback();
-              _fetchEvents();
-              if (!mounted) return;
-              messenger.showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Thank you for your feedback!',
-                    style: TextStyle(
-                      fontFamily: 'Figtree',
-                      fontSize: 13,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 500,
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            child: _RatingDialogContent(
+              event: event,
+              userName: userName,
+              userEmail: userEmail,
+              onSubmitted: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                await AttendeeService().refreshCompletedFeedback();
+                _fetchEvents();
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Thank you for your feedback!',
+                      style: TextStyle(
+                        fontFamily: 'Figtree',
+                        fontSize: 13,
+                      ),
                     ),
+                    backgroundColor: AppColors.oceanicNoir,
+                    behavior: SnackBarBehavior.floating,
                   ),
-                  backgroundColor: AppColors.oceanicNoir,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },
@@ -971,6 +979,7 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
   bool _isLoading = true;
   bool _isSubmitting = false;
   bool _answeredGForms = false;
+  bool _ratingExisted = false; // true if user has previously submitted a rating
   String? _modalError;
 
   @override
@@ -1000,6 +1009,7 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
           _selectedRating = data['rating'] as int? ?? 0;
           _feedbackController.text = data['feedback_text'] as String? ?? '';
           _answeredGForms = data['answered_gforms'] as bool? ?? false;
+          _ratingExisted = true; // pre-existing rating found
         }
         _isLoading = false;
       });
@@ -1026,7 +1036,9 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
       padding: const EdgeInsets.all(24.0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ── Header (pinned, stays visible above keyboard) ─────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1049,17 +1061,25 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            'How would you rate your experience at "${widget.event.eventName}"?',
-            style: const TextStyle(
-              fontFamily: 'Figtree',
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: Color(0xFF5A6E77),
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
+          // ── Scrollable form body ────────────────────────────────────
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'How would you rate your experience at "${widget.event.eventName}"?',
+                    style: const TextStyle(
+                      fontFamily: 'Figtree',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF5A6E77),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
 
           if (_isLoading)
             const SizedBox(
@@ -1192,9 +1212,13 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
                               widget.onSubmitted();
                             } catch (e) {
                               if (!mounted) return;
+                              debugPrint('Failed to submit rating: $e');
+                              final errorMsg = e.toString().contains('duplicate')
+                                  ? "You've already submitted a rating for this event."
+                                  : 'Something went wrong. Please try again.';
                               setState(() {
                                 _isSubmitting = false;
-                                _modalError = 'Failed to submit rating: $e';
+                                _modalError = errorMsg;
                               });
                             }
                           },
@@ -1214,9 +1238,10 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text(
-                            'Submit',
-                            style: TextStyle(
+                        : Text(
+                            // Show 'Update Rating' when editing a pre-existing rating
+                            _selectedRating > 0 && _ratingExisted ? 'Update Rating' : 'Submit',
+                            style: const TextStyle(
                               fontFamily: 'Figtree',
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -1238,11 +1263,15 @@ class _RatingDialogContentState extends State<_RatingDialogContent> {
                 ),
                 textAlign: TextAlign.center,
               ),
-            ],
-          ],
-        ],
-      ),
-    );
+            ], // end if _modalError spread
+          ], // end else ...[...] spread
+        ], // end inner Column children
+        ), // end inner Column
+      ), // end SingleChildScrollView
+    ), // end Flexible
+  ], // end outer Column children
+  ), // end outer Column
+); // end Padding / return
   }
 }
 

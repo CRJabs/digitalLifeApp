@@ -110,9 +110,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ).showSnackBar(const SnackBar(content: Text('Changes saved.')));
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Failed to save profile: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to save changes: $e'),
+        const SnackBar(
+          content: Text('Could not save changes. Please try again.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -130,9 +131,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Sign out failed: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sign out failed: $e'),
+        const SnackBar(
+          content: Text('Sign out failed. Please try again.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -163,155 +165,174 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Dialog(
+              clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
               backgroundColor: Colors.white,
-              child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 500,
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Send Feedback',
-                              style: TextStyle(
-                                fontFamily: 'Figtree',
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.oceanicNoir,
-                              ),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── Header — pinned above keyboard ─────────────────────
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Send Feedback',
+                            style: TextStyle(
+                              fontFamily: 'Figtree',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.oceanicNoir,
                             ),
-                            IconButton(
-                              onPressed: isSubmitting
-                                  ? null
-                                  : () => Navigator.pop(context),
-                              icon: const Icon(Icons.close_rounded, size: 20),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              color: AppColors.nocturnalExpedition.withAlpha(
-                                120,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDropdownField(
-                          'Category',
-                          selectedCategory,
-                          const [
-                            'General',
-                            'Events',
-                            'SSG Administration',
-                            'Application',
-                          ],
-                          (val) {
-                            setModalState(() {
-                              selectedCategory = val;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        _buildLabeledField(
-                          'Title',
-                          titleCtrl,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Please enter a title';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        _buildLabeledField(
-                          'Feedback',
-                          bodyCtrl,
-                          maxLines: 4,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Please enter the feedback body';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
+                          ),
+                          IconButton(
                             onPressed: isSubmitting
                                 ? null
-                                : () async {
-                                    if (!formKey.currentState!.validate()) {
-                                      return;
-                                    }
-                                    setModalState(() {
-                                      isSubmitting = true;
-                                    });
-
-                                    try {
-                                      await Supabase.instance.client
-                                          .from('feedback')
-                                          .insert({
-                                            'user_id': uid,
-                                            'category': selectedCategory,
-                                            'title': titleCtrl.text.trim(),
-                                            'body': bodyCtrl.text.trim(),
-                                          });
-
-                                      if (!context.mounted) return;
-                                      Navigator.pop(context); // close dialog
-
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Feedback submitted successfully! Thank you.',
-                                          ),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
-                                    } catch (e) {
-                                      if (!context.mounted) return;
-                                      setModalState(() {
-                                        isSubmitting = false;
-                                      });
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Failed to submit feedback: $e',
-                                          ),
-                                          backgroundColor: Colors.redAccent,
-                                        ),
-                                      );
-                                    }
-                                  },
-                            child: isSubmitting
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text('Submit Feedback'),
+                                : () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            color: AppColors.nocturnalExpedition.withAlpha(
+                              120,
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // ── Scrollable form body ───────────────────────────
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Form(
+                            key: formKey,
+                            child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildDropdownField(
+                              'Category',
+                              selectedCategory,
+                              const [
+                                'General',
+                                'Events',
+                                'SSG Administration',
+                                'Application',
+                              ],
+                              (val) {
+                                setModalState(() {
+                                  selectedCategory = val;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            _buildLabeledField(
+                              'Title',
+                              titleCtrl,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Please enter a title';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            _buildLabeledField(
+                              'Feedback',
+                              bodyCtrl,
+                              maxLines: 4,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Please enter the feedback body';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              height: 52,
+                              child: ElevatedButton(
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () async {
+                                        if (!formKey.currentState!.validate()) {
+                                          return;
+                                        }
+                                        setModalState(() {
+                                          isSubmitting = true;
+                                        });
+
+                                        try {
+                                          await Supabase.instance.client
+                                              .from('feedback')
+                                              .insert({
+                                                'user_id': uid,
+                                                'category': selectedCategory,
+                                                'title': titleCtrl.text.trim(),
+                                                'body': bodyCtrl.text.trim(),
+                                              });
+
+                                          if (!context.mounted) return;
+                                          Navigator.pop(context);
+
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Feedback submitted successfully! Thank you.',
+                                              ),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          if (!context.mounted) return;
+                                          debugPrint('Failed to submit feedback: $e');
+                                          setModalState(() {
+                                            isSubmitting = false;
+                                          });
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Could not submit feedback. Please try again.',
+                                              ),
+                                              backgroundColor: Colors.redAccent,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                child: isSubmitting
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Submit Feedback'),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              ),
-            );
+                  ), // end Flexible
+                ], // end outer Column children
+                ), // end outer Column
+              ), // end Padding
+            ), // end ConstrainedBox
+          ); // end Dialog / return
           },
         );
       },
@@ -363,7 +384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ── Scrollable body ─────────────────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(20, 16, 20, 120.0 + mq.padding.bottom),
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 104.0 + mq.padding.bottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [

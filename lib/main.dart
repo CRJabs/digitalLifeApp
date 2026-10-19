@@ -50,7 +50,7 @@ class LifeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LiFe – Log of Informative and Fun-Filled Experiences',
+      title: 'UB L.I.F.E.',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Figtree',
@@ -111,22 +111,42 @@ class LifeApp extends StatelessWidget {
       ),
       builder: (context, child) {
         final mq = MediaQuery.of(context);
-        const double maxContentWidth = 820.0; // iPad Air portrait width
+        final isBigScreen = mq.size.width > 600;
 
-        if (mq.size.width > maxContentWidth) {
-          // On desktop/wide screens: fixed text scale, content centered at 820px
-          // with white background filling the remaining space on each side.
-          return Container(
-            color: Colors.white,
-            child: Center(
-              child: SizedBox(
-                width: maxContentWidth,
-                child: MediaQuery(
-                  data: mq.copyWith(
-                    size: Size(maxContentWidth, mq.size.height),
-                    textScaler: const TextScaler.linear(1.0),
+        if (isBigScreen) {
+          // Whenever the web app is opened on a big screen (e.g. desktop/tablet),
+          // show a white background with appLogo.png and the mobile advisory message.
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 540),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/appLogo.png',
+                        height: 120,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(height: 32),
+                      const Text(
+                        'This web app was made primarily for mobile use and will be deployed as an application in the foreseeable future. For the best usage experience, open the web app on a mobile device',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Figtree',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          height: 1.6,
+                          color: AppColors.oceanicNoir,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: child!,
                 ),
               ),
             ),

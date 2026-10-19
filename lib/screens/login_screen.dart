@@ -6,7 +6,7 @@ import '../core/user_profile_service.dart';
 import '../core/security_service.dart';
 import 'main_shell.dart';
 import 'registration_screen.dart';
-import 'forgot_password_screen.dart';
+// import 'forgot_password_screen.dart';
 
 /// Login screen.
 /// The splash gradient is visible in the upper portion; a floating white
@@ -238,25 +238,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               : const Text('Sign In'),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const ForgotPasswordScreen(),
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          'Forgot Password?',
-                          style: TextStyle(
-                            fontFamily: 'Figtree',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.nocturnalExpedition,
-                          ),
-                        ),
-                      ),
+                      // ── Forgot Password (temporarily disabled) ─────────
+                      // const SizedBox(height: 12),
+                      // TextButton(
+                      //   onPressed: () {
+                      //     Navigator.of(context).push(
+                      //       MaterialPageRoute(
+                      //         builder: (_) => const ForgotPasswordScreen(),
+                      //       ),
+                      //     );
+                      //   },
+                      //   child: const Text(
+                      //     'Forgot Password?',
+                      //     style: TextStyle(
+                      //       fontFamily: 'Figtree',
+                      //       fontSize: 14,
+                      //       fontWeight: FontWeight.w600,
+                      //       color: AppColors.nocturnalExpedition,
+                      //     ),
+                      //   ),
+                      // ),
 
                       // ── UB footer ──────────────────────────────────────
                       const SizedBox(height: 32),

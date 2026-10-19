@@ -81,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  void _toggleEdit() => setState(() => _isEditing = !_isEditing);
+  // void _toggleEdit() => setState(() => _isEditing = !_isEditing);
 
   Future<void> _saveChanges() async {
     final uid = Supabase.instance.client.auth.currentUser?.id;
@@ -490,18 +490,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               const SizedBox(height: 14),
                             ],
                           ),
-                        )
-                      else ...[
-                        // ── Edit Information button ────────────────────────
-                        SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: _toggleEdit,
-                            child: const Text('Edit Information'),
-                          ),
                         ),
-                        const SizedBox(height: 14),
-                      ],
+                      // Edit Information button removed as requested
 
                       // ── Send Feedback button ────────────────────────────
                       SizedBox(

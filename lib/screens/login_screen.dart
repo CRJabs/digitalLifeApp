@@ -195,10 +195,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ── LiFe colored logo ──────────────────────────────
+                      // ── LiFe blue text logo ───────────────────────────
                       Image.asset(
-                        'assets/lifeColored.png',
-                        height: 76,
+                        'assets/lifeTextBlue.png',
+                        height: 60,
                         fit: BoxFit.contain,
                       ),
                       const SizedBox(height: 32),

@@ -366,8 +366,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   ),
                 ),
                 Image.asset(
-                  'assets/lifeColored.png',
-                  height: 38,
+                  'assets/lifeBadge.png',
+                  height: 42,
                   fit: BoxFit.contain,
                 ),
               ],

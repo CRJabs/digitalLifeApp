@@ -173,8 +173,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       // ── Logo ──────────────────────────────────────────────
                       Center(
                         child: Image.asset(
-                          'assets/lifeColored.png',
-                          height: 64,
+                          'assets/lifeBadge.png',
+                          height: 62,
                           fit: BoxFit.contain,
                         ),
                       ),

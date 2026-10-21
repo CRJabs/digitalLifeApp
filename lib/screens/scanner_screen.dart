@@ -27,8 +27,8 @@ class ScannerScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 24, bottom: 8),
                   child: Image.asset(
-                    'assets/life.png',
-                    height: 48,
+                    'assets/lifeBadgeWhite.png',
+                    height: 42,
                     fit: BoxFit.contain,
                   ),
                 ),

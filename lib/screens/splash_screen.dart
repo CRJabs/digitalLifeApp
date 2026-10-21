@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
-import '../core/app_text_styles.dart';
 import '../core/session_service.dart';
 import '../core/user_profile_service.dart';
 import 'login_screen.dart';
@@ -131,13 +130,7 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             children: [
               const Spacer(flex: 5),
-              Image.asset('assets/life.png', width: 200, fit: BoxFit.contain),
-              const SizedBox(height: 12),
-              Text(
-                'LOG OF INFORMATIVE AND\nFUN-FILLED EXPERIENCES',
-                style: AppTextStyles.splashTagline,
-                textAlign: TextAlign.center,
-              ),
+              Image.asset('assets/lifeTextWhite.png', width: 220, fit: BoxFit.contain),
               const Spacer(flex: 5),
             ],
           ),

@@ -506,7 +506,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          Image.asset('assets/lifeColored.png', height: 38, fit: BoxFit.contain),
+          Image.asset('assets/lifeBadge.png', height: 42, fit: BoxFit.contain),
         ],
       ),
     );

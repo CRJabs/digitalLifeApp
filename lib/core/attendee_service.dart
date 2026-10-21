@@ -265,6 +265,8 @@ class AttendeeService extends ChangeNotifier {
         _lastCheckedDay = now;
         dev.log('AttendeeService — calendar day changed, recalculating dues');
         refreshDues();
+      } else {
+        _recomputeDues();
       }
     });
   }
@@ -293,15 +295,18 @@ class AttendeeService extends ChangeNotifier {
           .maybeSingle();
       final viewDues = (row?['outstanding_dues'] as num?)?.toDouble();
       if (viewDues != null) {
-        if (viewDues > outstandingDues) {
-          final diff = viewDues - outstandingDues;
+        // Ensure server view doesn't exceed accurate client dues for today/past events
+        final localDues = getMissingChecks().fold(0.0, (sum, item) => sum + item.totalFine);
+        final syncedDues = viewDues > localDues ? localDues : viewDues;
+        if (syncedDues > outstandingDues) {
+          final diff = syncedDues - outstandingDues;
           NotificationService.showLocalNotification(
             'New Fine Added 🔴',
             'A fine of ₱${diff.toStringAsFixed(2)} has been added to your account.',
           );
         }
-        outstandingDues = viewDues;
-        dev.log('AttendeeService — refreshDues: updated outstandingDues from server view to ₱$outstandingDues');
+        outstandingDues = syncedDues;
+        dev.log('AttendeeService — refreshDues: updated outstandingDues to ₱$outstandingDues');
         notifyListeners();
       }
     } catch (e) {
@@ -309,7 +314,53 @@ class AttendeeService extends ChangeNotifier {
     }
   }
 
+  /// Parses 12-hour (e.g. "3:00 PM", "08:30 AM") or 24-hour (e.g. "15:00") time strings
+  /// on a given [eventDate].
+  DateTime? _parseSlotDateTime(DateTime eventDate, String? timeStr) {
+    if (timeStr == null || timeStr.trim().isEmpty) return null;
+    final clean = timeStr.trim().toUpperCase();
+
+    final isPm = clean.contains('PM');
+    final isAm = clean.contains('AM');
+
+    final digitsAndColons = clean.replaceAll(RegExp(r'[^\d:]'), '');
+    final parts = digitsAndColons.split(':');
+    if (parts.isEmpty || parts[0].isEmpty) return null;
+
+    int hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    final second = parts.length > 2 ? (int.tryParse(parts[2]) ?? 0) : 0;
+
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+
+    return DateTime(eventDate.year, eventDate.month, eventDate.day, hour, minute, second);
+  }
+
+  /// Determines whether a specific slot's scheduled attendance time has passed.
+  bool _hasSlotPassed({
+    required bool isToday,
+    required DateTime now,
+    required DateTime eventDate,
+    required String? slotTime,
+    required String? fallbackTime,
+    required int defaultHour,
+    required int defaultMinute,
+  }) {
+    if (!isToday) {
+      // Past event: the date is already before today, so all slots have passed.
+      return true;
+    }
+    final parsed = _parseSlotDateTime(eventDate, slotTime) ??
+        _parseSlotDateTime(eventDate, fallbackTime) ??
+        DateTime(eventDate.year, eventDate.month, eventDate.day, defaultHour, defaultMinute);
+
+    return now.isAfter(parsed);
+  }
+
   /// Compiles details of all missing checks for events that are today or in the past.
+  /// For events occurring today, checks are only marked as missed if their scheduled
+  /// cutoff time has actually passed.
   List<MissingCheckInfo> getMissingChecks() {
     final list = <MissingCheckInfo>[];
     final now = DateTime.now();
@@ -332,25 +383,74 @@ class AttendeeService extends ChangeNotifier {
         continue;
       }
 
+      final isToday = eventCompareDate.isAtSameMomentAs(todayDate);
+
       final morningInReq = eventJson['morningIn'] as bool? ?? false;
       final morningOutReq = eventJson['morningOut'] as bool? ?? false;
       final afternoonInReq = eventJson['afternoonIn'] as bool? ?? false;
       final afternoonOutReq = eventJson['afternoonOut'] as bool? ?? false;
 
+      final startTime = eventJson['startTime'] as String?;
+      final endTime = eventJson['endTime'] as String?;
+      final morningInTime = eventJson['morningInTime'] as String?;
+      final morningOutTime = eventJson['morningOutTime'] as String?;
+      final afternoonInTime = eventJson['afternoonInTime'] as String?;
+      final afternoonOutTime = eventJson['afternoonOutTime'] as String?;
+
       final attendee = recordFor(eventId);
       final missingSlots = <String>[];
 
       if (morningInReq && (attendee == null || !attendee.morningIn)) {
-        missingSlots.add('Morning Check-in');
+        if (_hasSlotPassed(
+          isToday: isToday,
+          now: now,
+          eventDate: eventCompareDate,
+          slotTime: morningInTime,
+          fallbackTime: startTime,
+          defaultHour: 12,
+          defaultMinute: 0,
+        )) {
+          missingSlots.add('Morning Check-in');
+        }
       }
       if (morningOutReq && (attendee == null || !attendee.morningOut)) {
-        missingSlots.add('Morning Check-out');
+        if (_hasSlotPassed(
+          isToday: isToday,
+          now: now,
+          eventDate: eventCompareDate,
+          slotTime: morningOutTime,
+          fallbackTime: startTime,
+          defaultHour: 12,
+          defaultMinute: 0,
+        )) {
+          missingSlots.add('Morning Check-out');
+        }
       }
       if (afternoonInReq && (attendee == null || !attendee.afternoonIn)) {
-        missingSlots.add('Afternoon Check-in');
+        if (_hasSlotPassed(
+          isToday: isToday,
+          now: now,
+          eventDate: eventCompareDate,
+          slotTime: afternoonInTime,
+          fallbackTime: startTime,
+          defaultHour: 13,
+          defaultMinute: 0,
+        )) {
+          missingSlots.add('Afternoon Check-in');
+        }
       }
       if (afternoonOutReq && (attendee == null || !attendee.afternoonOut)) {
-        missingSlots.add('Afternoon Check-out');
+        if (_hasSlotPassed(
+          isToday: isToday,
+          now: now,
+          eventDate: eventCompareDate,
+          slotTime: afternoonOutTime,
+          fallbackTime: endTime,
+          defaultHour: 17,
+          defaultMinute: 0,
+        )) {
+          missingSlots.add('Afternoon Check-out');
+        }
       }
 
       if (missingSlots.isNotEmpty) {

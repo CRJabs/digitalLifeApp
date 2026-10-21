@@ -707,21 +707,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        // Bottom row: location chip + time chip + badges
-                        Row(
+                        // Bottom row: location chip + time chip + badges (auto-scrolling and contained within card)
+                        _AutoScrollingChips(
+                          spacing: 8,
                           children: [
                             // Location
                             _chip(
                               Icons.location_on_rounded,
                               location.isNotEmpty ? location : 'TBA',
                             ),
-                            const SizedBox(width: 8),
                             // Time
                             _chip(
                               Icons.access_time_rounded,
                               '${_format24to12(startTime)} – ${_format24to12(endTime)}',
                             ),
-                            const SizedBox(width: 8),
                             // Session slots
                             if (sessionText.isNotEmpty)
                               _chip(Icons.wb_sunny_rounded, sessionText),
@@ -849,6 +848,8 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 4),
           Text(
             label,
+            maxLines: 1,
+            softWrap: false,
             style: const TextStyle(
               fontFamily: 'Figtree',
               fontSize: 10,
@@ -1140,5 +1141,111 @@ class _HomeScreenState extends State<HomeScreen> {
     final displayHour = hour % 12 == 0 ? 12 : hour % 12;
     final displayMinute = minute.toString().padLeft(2, '0');
     return '$displayHour:$displayMinute $ampm';
+  }
+}
+
+/// Automatically scrolls its child chips horizontally in a loop if they overflow the card width.
+class _AutoScrollingChips extends StatefulWidget {
+  final List<Widget> children;
+  final double spacing;
+
+  const _AutoScrollingChips({
+    required this.children,
+    this.spacing = 8.0,
+  });
+
+  @override
+  State<_AutoScrollingChips> createState() => _AutoScrollingChipsState();
+}
+
+class _AutoScrollingChipsState extends State<_AutoScrollingChips> {
+  final ScrollController _scrollController = ScrollController();
+  bool _isDisposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startAutoScroll();
+    });
+  }
+
+  Future<void> _startAutoScroll() async {
+    if (_isDisposed || !mounted) return;
+    await Future.delayed(const Duration(milliseconds: 1800));
+
+    while (!_isDisposed && mounted && _scrollController.hasClients) {
+      if (!_scrollController.position.hasContentDimensions) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        continue;
+      }
+
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      if (maxScroll <= 0) {
+        await Future.delayed(const Duration(milliseconds: 1500));
+        continue;
+      }
+
+      final forwardDuration = Duration(
+        milliseconds: (maxScroll * 35).clamp(2000, 10000).toInt(),
+      );
+
+      if (!_scrollController.hasClients || _isDisposed || !mounted) break;
+      try {
+        await _scrollController.animateTo(
+          maxScroll,
+          duration: forwardDuration,
+          curve: Curves.easeInOut,
+        );
+      } catch (_) {
+        break;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 1800));
+
+      if (!_scrollController.hasClients || _isDisposed || !mounted) break;
+      final returnDuration = Duration(
+        milliseconds: (maxScroll * 25).clamp(1500, 8000).toInt(),
+      );
+      try {
+        await _scrollController.animateTo(
+          0.0,
+          duration: returnDuration,
+          curve: Curves.easeInOut,
+        );
+      } catch (_) {
+        break;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 1800));
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < widget.children.length; i++) ...[
+              widget.children[i],
+              if (i < widget.children.length - 1)
+                SizedBox(width: widget.spacing),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

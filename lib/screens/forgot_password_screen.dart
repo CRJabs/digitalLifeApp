@@ -65,9 +65,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       
+      final isNetwork = _isNetworkError(e.message);
+      final message = isNetwork
+          ? 'Network issue: Unable to connect to server. Please check your internet connection and try again.'
+          : (e.message.toLowerCase().contains('exception') || e.message.toLowerCase().contains('uri=')
+              ? 'Could not send reset link. Please check your email and try again.'
+              : e.message);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message),
+          content: Text(message),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -75,13 +82,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (!mounted) return;
       debugPrint('Forgot password unexpected error: $e');
       setState(() => _loading = false);
+      final isNetwork = _isNetworkError(e.toString());
+      final message = isNetwork
+          ? 'Network issue: Unable to connect to server. Please check your internet connection and try again.'
+          : 'Could not send reset link. Please check your connection and try again.';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not send reset link. Please check your connection and try again.'),
+        SnackBar(
+          content: Text(message),
           backgroundColor: Colors.redAccent,
         ),
       );
     }
+  }
+
+  bool _isNetworkError(String errorMsg) {
+    final lower = errorMsg.toLowerCase();
+    return lower.contains('socketexception') ||
+        lower.contains('clientexception') ||
+        lower.contains('connection timed out') ||
+        lower.contains('timed out') ||
+        lower.contains('timeout') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('connection refused') ||
+        lower.contains('handshakeexception') ||
+        lower.contains('xmlhttprequest') ||
+        lower.contains('errno =') ||
+        lower.contains('uri=https://') ||
+        lower.contains('supabase.co');
   }
 
   @override

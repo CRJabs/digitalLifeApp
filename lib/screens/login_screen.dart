@@ -90,21 +90,37 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } on AuthException catch (e) {
-      await SecurityService().recordLoginAttempt(false);
+      final isNetwork = _isNetworkError(e.message);
+
+      // Only penalize security cooldown if it is an actual credential failure, not a network/connection failure
+      if (!isNetwork) {
+        await SecurityService().recordLoginAttempt(false);
+      }
       final newCooldown = await SecurityService().getLoginCooldownRemaining();
 
       if (!mounted) return;
       setState(() => _loading = false);
       
-      String message = 'An error occurred. Please try again.';
-      if (newCooldown > 0) {
+      String message;
+      if (isNetwork) {
+        message = 'Network issue: Unable to connect to server. Please check your internet connection and try again.';
+      } else if (newCooldown > 0) {
         String waitText = '$newCooldown seconds';
         if (newCooldown > 60) {
           waitText = '${(newCooldown / 60).ceil()} minutes';
         }
         message = 'Wrong credentials. Too many failed attempts: Login locked for $waitText.';
       } else {
-        message = e.message;
+        final lower = e.message.toLowerCase();
+        if (lower.contains('invalid login credentials')) {
+          message = 'Invalid email or password. Please try again.';
+        } else if (lower.contains('email not confirmed')) {
+          message = 'Please confirm your email address before logging in.';
+        } else if (lower.contains('exception') || lower.contains('http') || lower.contains('uri=')) {
+          message = 'Unable to log in. Please check your credentials and try again.';
+        } else {
+          message = e.message;
+        }
       }
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,17 +130,42 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } catch (e) {
-      await SecurityService().recordLoginAttempt(false);
+      final isNetwork = _isNetworkError(e.toString());
+      if (!isNetwork) {
+        await SecurityService().recordLoginAttempt(false);
+      }
       if (!mounted) return;
       debugPrint('Login unexpected error: $e');
       setState(() => _loading = false);
+      
+      final message = isNetwork
+          ? 'Network issue: Unable to connect to server. Please check your internet connection and try again.'
+          : 'Login failed. Please check your connection and try again.';
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Login failed. Please check your connection and try again.'),
+        SnackBar(
+          content: Text(message),
           backgroundColor: Colors.redAccent,
         ),
       );
     }
+  }
+
+  bool _isNetworkError(String errorMsg) {
+    final lower = errorMsg.toLowerCase();
+    return lower.contains('socketexception') ||
+        lower.contains('clientexception') ||
+        lower.contains('connection timed out') ||
+        lower.contains('timed out') ||
+        lower.contains('timeout') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('connection refused') ||
+        lower.contains('handshakeexception') ||
+        lower.contains('xmlhttprequest') ||
+        lower.contains('errno =') ||
+        lower.contains('uri=https://') ||
+        lower.contains('supabase.co');
   }
 
   @override

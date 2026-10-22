@@ -6,7 +6,7 @@ import '../core/user_profile_service.dart';
 import '../core/security_service.dart';
 import 'main_shell.dart';
 import 'registration_screen.dart';
-// import 'forgot_password_screen.dart';
+import 'life_support_hub_screen.dart';
 
 /// Login screen.
 /// The splash gradient is visible in the upper portion; a floating white
@@ -180,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withAlpha(40),
@@ -279,26 +279,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               : const Text('Sign In'),
                         ),
                       ),
-                      // ── Forgot Password (temporarily disabled) ─────────
-                      // const SizedBox(height: 12),
-                      // TextButton(
-                      //   onPressed: () {
-                      //     Navigator.of(context).push(
-                      //       MaterialPageRoute(
-                      //         builder: (_) => const ForgotPasswordScreen(),
-                      //       ),
-                      //     );
-                      //   },
-                      //   child: const Text(
-                      //     'Forgot Password?',
-                      //     style: TextStyle(
-                      //       fontFamily: 'Figtree',
-                      //       fontSize: 14,
-                      //       fontWeight: FontWeight.w600,
-                      //       color: AppColors.nocturnalExpedition,
-                      //     ),
-                      //   ),
-                      // ),
+                      // ── Need help signing in? ─────────────────────────
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LifeSupportHubScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Need help signing in?',
+                          style: TextStyle(
+                            fontFamily: 'Figtree',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.nocturnalExpedition,
+                          ),
+                        ),
+                      ),
 
                       // ── UB footer ──────────────────────────────────────
                       const SizedBox(height: 32),

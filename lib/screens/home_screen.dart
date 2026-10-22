@@ -885,31 +885,30 @@ class _HomeScreenState extends State<HomeScreen> {
     final items = _activeCarouselItems;
     if (items.isEmpty) return const SizedBox.shrink();
 
-    // Custom carousel height
-    const double carouselHeight = 154.0;
-
-    return Container(
-      height: carouselHeight,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.mysticMint, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(20),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: AspectRatio(
+        aspectRatio: 3.86,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.mysticMint, width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(20),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          children: [
-            // PageView fills the entire container so background images can be full bleed
-            Positioned.fill(
-              child: PageView.builder(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              children: [
+                // PageView fills the entire container so background images can be full bleed
+                Positioned.fill(
+                  child: PageView.builder(
                 controller: _carouselController,
                 itemCount: items.length,
                 onPageChanged: (page) {
@@ -1009,7 +1008,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           // 4. Text content
                           Positioned.fill(
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 12, 50, 12),
+                              padding: const EdgeInsets.fromLTRB(16, 8, 48, 8),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1020,11 +1019,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 3),
+                                  const SizedBox(height: 2),
                                   Text(
                                     item['desc'] ?? '',
                                     style: descStyle,
-                                    maxLines: 4,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
@@ -1067,7 +1066,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   // ── Activity list ────────────────────────────────────────────────────────

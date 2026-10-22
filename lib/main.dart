@@ -71,26 +71,26 @@ class LifeApp extends StatelessWidget {
             vertical: 14,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.mysticMint),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.mysticMint),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(
               color: AppColors.nocturnalExpedition,
               width: 1.5,
             ),
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Colors.red),
           ),
           focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Colors.red, width: 1.5),
           ),
         ),
@@ -101,7 +101,7 @@ class LifeApp extends StatelessWidget {
             foregroundColor: Colors.white,
             disabledBackgroundColor: AppColors.nocturnalExpedition.withAlpha(100),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
             minimumSize: const Size(double.infinity, 52),
             textStyle: AppTextStyles.button,
@@ -115,7 +115,7 @@ class LifeApp extends StatelessWidget {
 
         if (isBigScreen) {
           // Whenever the web app is opened on a big screen (e.g. desktop/tablet),
-          // show a white background with appLogo.png and the mobile advisory message.
+          // show a white background with lifeBadge.png and the mobile advisory message.
           return Scaffold(
             backgroundColor: Colors.white,
             body: Center(
@@ -128,7 +128,7 @@ class LifeApp extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Image.asset(
-                        'assets/appLogo.png',
+                        'assets/lifeBadge.png',
                         height: 120,
                         fit: BoxFit.contain,
                       ),

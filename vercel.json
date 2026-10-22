@@ -2,7 +2,7 @@
   "outputDirectory": "build/web",
   "headers": [
     {
-      "source": "/(flutter_service_worker.js|flutter_bootstrap.js|index.html|version.json)",
+      "source": "/(flutter_service_worker.js|flutter_bootstrap.js|index.html|version.json|main.dart.js)",
       "headers": [
         {
           "key": "Cache-Control",

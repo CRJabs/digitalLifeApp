@@ -34,12 +34,19 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <!-- Unregister any legacy service workers so users always load the newest bundle -->
+  <!-- Unregister any legacy service workers and clear cache storage so users always load the newest bundle -->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         for (let registration of registrations) {
           registration.unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (let name of names) {
+          caches.delete(name);
         }
       });
     }

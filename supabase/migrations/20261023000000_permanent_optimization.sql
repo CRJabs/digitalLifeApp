@@ -21,14 +21,15 @@ CREATE INDEX IF NOT EXISTS idx_fines_summary_name ON public.student_fines_summar
 CREATE INDEX IF NOT EXISTS idx_fines_summary_dues ON public.student_fines_summary (outstanding_dues DESC);
 CREATE INDEX IF NOT EXISTS idx_fines_summary_email ON public.student_fines_summary (lower(student_email));
 
--- Enable RLS and grant read access
+-- Enable RLS and grant read/write access
 ALTER TABLE public.student_fines_summary ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow read student_fines_summary" ON public.student_fines_summary;
-CREATE POLICY "Allow read student_fines_summary" ON public.student_fines_summary 
-    FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow write student_fines_summary" ON public.student_fines_summary;
+CREATE POLICY "Allow write student_fines_summary" ON public.student_fines_summary 
+    FOR ALL TO public USING (true) WITH CHECK (true);
 
-GRANT SELECT ON public.student_fines_summary TO anon, authenticated, service_role;
+GRANT ALL ON public.student_fines_summary TO anon, authenticated, service_role;
 
 -- 2. Performance Indexes on existing tables to eliminate seq scans
 CREATE INDEX IF NOT EXISTS idx_users_name ON public.users (name);

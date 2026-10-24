@@ -101,22 +101,64 @@ class SecurityService {
     }
   }
 
+  /// Set an explicit cooldown duration (e.g. when HTTP 429 rate limit is encountered).
+  Future<void> recordRateLimitHit([int seconds = 60]) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cooldownUntil = now + Duration(seconds: seconds).inMilliseconds;
+    await prefs.setInt(_keyCooldownUntil, cooldownUntil);
+  }
+
+  /// Check server-side rate limit table via PostgreSQL RPC (0 bcrypt computation).
+  /// Returns a map with 'allowed' (bool), 'remaining_seconds' (int), and 'message' (String).
+  Future<Map<String, dynamic>> checkServerRateLimit(String email) async {
+    final clean = email.trim().toLowerCase();
+    if (clean.isEmpty) return {'allowed': true};
+
+    try {
+      final res = await Supabase.instance.client.rpc(
+        'check_auth_rate_limit',
+        params: {'p_identifier': clean},
+      );
+      if (res is Map) {
+        return Map<String, dynamic>.from(res);
+      }
+      return {'allowed': true};
+    } catch (_) {
+      // If server RPC is unreachable, gracefully fall back to local device rate limit
+      return {'allowed': true};
+    }
+  }
+
+  /// Record auth attempt on server-side rate limit table via PostgreSQL RPC.
+  Future<void> recordServerAttempt(String email, bool success) async {
+    final clean = email.trim().toLowerCase();
+    if (clean.isEmpty) return;
+
+    try {
+      await Supabase.instance.client.rpc(
+        'record_auth_attempt',
+        params: {'p_identifier': clean, 'p_success': success},
+      );
+    } catch (_) {
+      // Gracefully ignore server logging failure
+    }
+  }
+
   /// Helper to get current login attempt count
   Future<int> getLoginAttempts() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_keyLoginAttempts) ?? 0;
   }
 
-  /// Clears all rate-limiting state for a fresh session.
-  ///
-  /// Call this when the login screen mounts and no Supabase session is active,
-  /// so that a previous user's cooldown on the same device does not block the
-  /// next user from logging in.
+  /// Clears rate-limiting state ONLY after an explicit administrative unlock or successful session.
+  /// (Does not wipe on unauthenticated screen mount to prevent cooldown bypass).
   Future<void> resetForNewSession() async {
-    final hasActiveSession =
-        Supabase.instance.client.auth.currentSession != null;
-    if (hasActiveSession) return; // only reset when no one is logged in
+    // Intentionally keep device cooldown intact so screen reload cannot bypass lockout
+  }
 
+  /// Force clear cooldown (used on successful login or explicit user sign-out).
+  Future<void> clearCooldown() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyLoginAttempts);
     await prefs.remove(_keyCooldownUntil);

@@ -29,8 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Clear any rate-limit state left by a previous user on this device.
-    SecurityService().resetForNewSession();
   }
 
   @override
@@ -43,6 +41,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final email = _emailCtrl.text.trim();
+
+    // 1. Check local device cooldown
     final cooldownRemaining = await SecurityService().getLoginCooldownRemaining();
     if (!mounted) return;
     if (cooldownRemaining > 0) {
@@ -59,18 +60,37 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    // 2. Check server-side account cooldown via fast RPC (0 bcrypt cost)
+    final serverLimit = await SecurityService().checkServerRateLimit(email);
+    if (!mounted) return;
+    if (serverLimit['allowed'] == false) {
+      final waitSec = (serverLimit['remaining_seconds'] as num?)?.toInt() ?? 60;
+      await SecurityService().recordRateLimitHit(waitSec);
+      if (!mounted) return;
+      final waitText = waitSec > 60 ? '${(waitSec / 60).ceil()} minutes' : '$waitSec seconds';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Account temporarily locked due to excessive failed attempts. Please try again in $waitText.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
     
     try {
       final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailCtrl.text.trim(),
+        email: email,
         password: _passwordCtrl.text,
       );
 
       final user = response.user;
       if (user == null) throw const AuthException('Login failed: User is null');
 
+      // Clear both local and server failure counters on successful auth
       await SecurityService().recordLoginAttempt(true);
+      await SecurityService().recordServerAttempt(email, true);
 
       // Load this user's profile from Supabase before routing.
       await UserProfileService().loadProfile();
@@ -90,19 +110,29 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } on AuthException catch (e) {
-      final isNetwork = _isNetworkError(e.message);
+      final isRateLimit = e.statusCode == '429' ||
+          e.message.toLowerCase().contains('rate limit') ||
+          e.message.toLowerCase().contains('too many requests') ||
+          e.code == 'over_request_rate_limit';
+      final isNetwork = !isRateLimit && _isNetworkError(e.message);
 
-      // Only penalize security cooldown if it is an actual credential failure, not a network/connection failure
-      if (!isNetwork) {
+      if (isRateLimit) {
+        // Enforce 60-second backoff immediately
+        await SecurityService().recordRateLimitHit(60);
+      } else if (!isNetwork) {
         await SecurityService().recordLoginAttempt(false);
+        await SecurityService().recordServerAttempt(email, false);
       }
+
       final newCooldown = await SecurityService().getLoginCooldownRemaining();
 
       if (!mounted) return;
       setState(() => _loading = false);
       
       String message;
-      if (isNetwork) {
+      if (isRateLimit) {
+        message = 'Server is busy due to high traffic. Rate limit reached; please wait 60 seconds before trying again.';
+      } else if (isNetwork) {
         message = 'Network issue: Unable to connect to server. Please check your internet connection and try again.';
       } else if (newCooldown > 0) {
         String waitText = '$newCooldown seconds';
@@ -133,6 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final isNetwork = _isNetworkError(e.toString());
       if (!isNetwork) {
         await SecurityService().recordLoginAttempt(false);
+        await SecurityService().recordServerAttempt(email, false);
       }
       if (!mounted) return;
       debugPrint('Login unexpected error: $e');
@@ -153,19 +184,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isNetworkError(String errorMsg) {
     final lower = errorMsg.toLowerCase();
+    if (lower.contains('rate limit') ||
+        lower.contains('invalid login') ||
+        lower.contains('over_request_rate_limit') ||
+        lower.contains('429') ||
+        lower.contains('400')) {
+      return false;
+    }
     return lower.contains('socketexception') ||
         lower.contains('clientexception') ||
         lower.contains('connection timed out') ||
         lower.contains('timed out') ||
-        lower.contains('timeout') ||
         lower.contains('failed host lookup') ||
         lower.contains('network is unreachable') ||
         lower.contains('connection refused') ||
         lower.contains('handshakeexception') ||
         lower.contains('xmlhttprequest') ||
-        lower.contains('errno =') ||
-        lower.contains('uri=https://') ||
-        lower.contains('supabase.co');
+        lower.contains('errno =');
   }
 
   @override

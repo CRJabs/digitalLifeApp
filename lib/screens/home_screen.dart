@@ -580,8 +580,15 @@ class _HomeScreenState extends State<HomeScreen> {
           final location = ev['location'] as String? ?? '';
           final startTime = ev['startTime'] as String? ?? '';
           final endTime = ev['endTime'] as String? ?? '';
-          final isCompulsory = ev['isCompulsory'] as bool? ?? ev['is_compulsory'] as bool? ?? false;
-          final isVoid = ev['isVoid'] as bool? ?? ev['is_void'] as bool? ?? false;
+          bool parseBool(dynamic val) {
+            if (val == null) return false;
+            if (val is bool) return val;
+            if (val is num) return val == 1;
+            if (val is String) return val.toLowerCase() == 'true' || val == '1';
+            return false;
+          }
+          final isCompulsory = parseBool(ev['isCompulsory'] ?? ev['is_compulsory']);
+          final isVoid = parseBool(ev['isVoid'] ?? ev['is_void']);
           final providePoints = ev['providePoints'] as bool? ?? false;
           final pointsAwarded = (ev['pointsAwarded'] as num?)?.toInt() ?? 0;
 

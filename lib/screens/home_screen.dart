@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final data = await Supabase.instance.client
           .from('events')
           .select(
-              'id, eventName, location, startTime, endTime, morningIn, morningOut, afternoonIn, afternoonOut, morningInTime, morningOutTime, afternoonInTime, afternoonOutTime, isCompulsory, providePoints, pointsAwarded')
+              'id, eventName, location, startTime, endTime, morningIn, morningOut, afternoonIn, afternoonOut, morningInTime, morningOutTime, afternoonInTime, afternoonOutTime, isCompulsory, isVoid, providePoints, pointsAwarded')
           .eq('date', todayStr)
           .order('startTime', ascending: true);
       if (!mounted) return;
@@ -580,7 +580,8 @@ class _HomeScreenState extends State<HomeScreen> {
           final location = ev['location'] as String? ?? '';
           final startTime = ev['startTime'] as String? ?? '';
           final endTime = ev['endTime'] as String? ?? '';
-          final isCompulsory = ev['isCompulsory'] as bool? ?? false;
+          final isCompulsory = ev['isCompulsory'] as bool? ?? ev['is_compulsory'] as bool? ?? false;
+          final isVoid = ev['isVoid'] as bool? ?? ev['is_void'] as bool? ?? false;
           final providePoints = ev['providePoints'] as bool? ?? false;
           final pointsAwarded = (ev['pointsAwarded'] as num?)?.toInt() ?? 0;
 
@@ -662,7 +663,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ),
                                       const SizedBox(width: 6),
-                                      if (isCompulsory)
+                                      if (isVoid)
+                                        _smallBadge('Voided', Colors.red.shade300, Colors.red.withAlpha(70))
+                                      else if (isCompulsory)
                                         _smallBadge('Compulsory', Colors.red.shade300, Colors.red.withAlpha(50))
                                       else
                                         _smallBadge('Voluntary', Colors.grey.shade400, Colors.grey.withAlpha(40)),

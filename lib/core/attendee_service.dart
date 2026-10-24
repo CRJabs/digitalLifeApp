@@ -370,6 +370,8 @@ class AttendeeService extends ChangeNotifier {
       final eventId = eventJson['id'] as String;
       final eventName = eventJson['eventName'] as String? ?? 'Unknown Event';
       final eventDateStr = eventJson['date'] as String? ?? '';
+      final isVoid = eventJson['isVoid'] as bool? ?? eventJson['is_void'] as bool? ?? false;
+      if (isVoid) continue;
 
       DateTime? eventDate;
       try {

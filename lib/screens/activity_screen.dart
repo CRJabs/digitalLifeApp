@@ -25,7 +25,6 @@ class SupabaseEvent {
   final bool isCompulsory;
   final bool providePoints;
   final int pointsAwarded;
-  final bool sendEvaluationImmediately;
   final bool isVoid;
 
   const SupabaseEvent({
@@ -44,7 +43,6 @@ class SupabaseEvent {
     required this.isCompulsory,
     required this.providePoints,
     required this.pointsAwarded,
-    this.sendEvaluationImmediately = false,
     this.isVoid = false,
   });
 
@@ -56,6 +54,14 @@ class SupabaseEvent {
       return 0;
     }
 
+    bool parseBool(dynamic val) {
+      if (val == null) return false;
+      if (val is bool) return val;
+      if (val is num) return val == 1;
+      if (val is String) return val.toLowerCase() == 'true' || val == '1';
+      return false;
+    }
+
     return SupabaseEvent(
       id: json['id'] as String,
       eventName: json['eventName'] as String? ?? '',
@@ -64,16 +70,15 @@ class SupabaseEvent {
       startTime: json['startTime'] as String? ?? '',
       endTime: json['endTime'] as String? ?? '',
       category: json['category'] as String? ?? 'Other',
-      morningIn: json['morningIn'] as bool? ?? false,
-      morningOut: json['morningOut'] as bool? ?? false,
-      afternoonIn: json['afternoonIn'] as bool? ?? false,
-      afternoonOut: json['afternoonOut'] as bool? ?? false,
+      morningIn: parseBool(json['morningIn']),
+      morningOut: parseBool(json['morningOut']),
+      afternoonIn: parseBool(json['afternoonIn']),
+      afternoonOut: parseBool(json['afternoonOut']),
       googleFormsLink: json['googleFormsLink'] as String?,
-      isCompulsory: json['isCompulsory'] as bool? ?? false,
-      providePoints: json['providePoints'] as bool? ?? false,
-      pointsAwarded: parsePoints(json['pointsAwarded']),
-      sendEvaluationImmediately: json['sendEvaluationImmediately'] as bool? ?? false,
-      isVoid: json['isVoid'] as bool? ?? false,
+      isCompulsory: parseBool(json['isCompulsory'] ?? json['is_compulsory']),
+      providePoints: parseBool(json['providePoints'] ?? json['provide_points']),
+      pointsAwarded: parsePoints(json['pointsAwarded'] ?? json['points_awarded']),
+      isVoid: parseBool(json['isVoid'] ?? json['is_void']),
     );
   }
 }
@@ -719,7 +724,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final hasRated = _ratingFeedbacks.containsKey(item.id);
     final feedbackText = _ratingFeedbacks[item.id];
     final isFeedbackDone = hasRated && feedbackText != null && feedbackText.trim().isNotEmpty;
-    final showHelpButton = item.sendEvaluationImmediately || ((isFinished || isToday) && hasCheck);
+    final showHelpButton = (isFinished || isToday) && hasCheck;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

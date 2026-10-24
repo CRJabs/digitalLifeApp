@@ -25,6 +25,8 @@ class SupabaseEvent {
   final bool isCompulsory;
   final bool providePoints;
   final int pointsAwarded;
+  final bool sendEvaluationImmediately;
+  final bool isVoid;
 
   const SupabaseEvent({
     required this.id,
@@ -42,6 +44,8 @@ class SupabaseEvent {
     required this.isCompulsory,
     required this.providePoints,
     required this.pointsAwarded,
+    this.sendEvaluationImmediately = false,
+    this.isVoid = false,
   });
 
   factory SupabaseEvent.fromJson(Map<String, dynamic> json) {
@@ -68,6 +72,8 @@ class SupabaseEvent {
       isCompulsory: json['isCompulsory'] as bool? ?? false,
       providePoints: json['providePoints'] as bool? ?? false,
       pointsAwarded: parsePoints(json['pointsAwarded']),
+      sendEvaluationImmediately: json['sendEvaluationImmediately'] as bool? ?? false,
+      isVoid: json['isVoid'] as bool? ?? false,
     );
   }
 }
@@ -587,7 +593,29 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  Widget _buildCompulsoryBadge(bool isCompulsory) {
+  Widget _buildCompulsoryBadge(bool isCompulsory, {bool isVoid = false}) {
+    if (isVoid) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.red.shade100,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: Colors.red.shade300,
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          'Voided',
+          style: TextStyle(
+            fontFamily: 'Figtree',
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            color: Colors.red.shade800,
+          ),
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -691,7 +719,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final hasRated = _ratingFeedbacks.containsKey(item.id);
     final feedbackText = _ratingFeedbacks[item.id];
     final isFeedbackDone = hasRated && feedbackText != null && feedbackText.trim().isNotEmpty;
-    final showHelpButton = (isFinished || isToday) && hasCheck;
+    final showHelpButton = item.sendEvaluationImmediately || ((isFinished || isToday) && hasCheck);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -721,7 +749,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       runSpacing: 4,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        _buildCompulsoryBadge(item.isCompulsory),
+                        _buildCompulsoryBadge(item.isCompulsory, isVoid: item.isVoid),
                         if (item.providePoints && item.pointsAwarded > 0)
                           _buildTorchbearerBadge(item.pointsAwarded),
                         _buildFeedbackBadgeInline(hasCheck, hasRated, isFeedbackDone),

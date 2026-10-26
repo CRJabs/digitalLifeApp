@@ -371,19 +371,23 @@ class _FinesScreenState extends State<FinesScreen> {
             spacing: 6,
             runSpacing: 6,
             children: info.missingSlots.map((slot) {
+              final isPending = slot.contains('Pending Rating');
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.arcticPowder,
+                  color: isPending ? Colors.amber.shade50 : AppColors.arcticPowder,
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: AppColors.mysticMint, width: 0.8),
+                  border: Border.all(
+                    color: isPending ? Colors.amber.shade200 : AppColors.mysticMint,
+                    width: 0.8,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.cancel_rounded,
-                      color: Colors.redAccent,
+                    Icon(
+                      isPending ? Icons.star_border_rounded : Icons.cancel_rounded,
+                      color: isPending ? Colors.amber.shade800 : Colors.redAccent,
                       size: 12,
                     ),
                     const SizedBox(width: 4),
@@ -392,6 +396,7 @@ class _FinesScreenState extends State<FinesScreen> {
                       style: AppTextStyles.activitySubtitle.copyWith(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
+                        color: isPending ? Colors.amber.shade900 : null,
                       ),
                     ),
                   ],

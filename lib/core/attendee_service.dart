@@ -214,6 +214,7 @@ class AttendeeService extends ChangeNotifier {
     if (_currentEmail != null) {
       await _fetchCompletedFeedback(_currentEmail!);
       await refreshDues();
+      await _fetchTorchbearerPoints(_currentEmail!);
     }
   }
 
@@ -236,17 +237,52 @@ class AttendeeService extends ChangeNotifier {
 
   Future<void> _fetchTorchbearerPoints(String email) async {
     try {
-      final rows = await Supabase.instance.client
-          .from('attendees')
-          .select('pointsEarned')
-          .ilike('student_email', email);
+      // 1. Primary: sync from student_fines_view where total_points is accurately
+      // calculated by recalculate_student_fines based on attended AND rated events.
+      final row = await Supabase.instance.client
+          .from('student_fines_view')
+          .select('total_points')
+          .ilike('student_email', email)
+          .maybeSingle();
 
+      if (row != null && row['total_points'] != null) {
+        torchbearerPoints = (row['total_points'] as num).toDouble();
+        dev.log('AttendeeService — torchbearerPoints (from view): $torchbearerPoints');
+        notifyListeners();
+        return;
+      }
+
+      // 2. Fallback: calculate directly for rated events where all configured sessions are attended
       double total = 0.0;
-      for (final row in (rows as List)) {
-        total += (row['pointsEarned'] as num?)?.toDouble() ?? 0.0;
+      for (final eventJson in _cachedEvents) {
+        final eventId = eventJson['id'] as String;
+        final providePoints = eventJson['providePoints'] as bool? ?? false;
+        if (!providePoints) continue;
+
+        // User MUST have completed rating/feedback for this event
+        if (!completedFeedbackEventIds.contains(eventId)) continue;
+
+        final attendee = recordFor(eventId);
+        if (attendee == null) continue;
+
+        final morningInReq = eventJson['morningIn'] as bool? ?? false;
+        final morningOutReq = eventJson['morningOut'] as bool? ?? false;
+        final afternoonInReq = eventJson['afternoonIn'] as bool? ?? false;
+        final afternoonOutReq = eventJson['afternoonOut'] as bool? ?? false;
+
+        final hasAny = morningInReq || morningOutReq || afternoonInReq || afternoonOutReq;
+        if (!hasAny) continue;
+
+        if (morningInReq && !attendee.morningIn) continue;
+        if (morningOutReq && !attendee.morningOut) continue;
+        if (afternoonInReq && !attendee.afternoonIn) continue;
+        if (afternoonOutReq && !attendee.afternoonOut) continue;
+
+        final pts = (eventJson['pointsAwarded'] as num?)?.toDouble() ?? 0.0;
+        total += pts;
       }
       torchbearerPoints = total;
-      dev.log('AttendeeService — torchbearerPoints: $torchbearerPoints');
+      dev.log('AttendeeService — torchbearerPoints (fallback): $torchbearerPoints');
       notifyListeners();
     } catch (e) {
       dev.log('AttendeeService — fetchTorchbearerPoints error: $e');
@@ -400,58 +436,79 @@ class AttendeeService extends ChangeNotifier {
       final afternoonOutTime = eventJson['afternoonOutTime'] as String?;
 
       final attendee = recordFor(eventId);
+      final isCompulsory = eventJson['isCompulsory'] as bool? ?? false;
+      final isRated = completedFeedbackEventIds.contains(eventId);
       final missingSlots = <String>[];
 
-      if (morningInReq && (attendee == null || !attendee.morningIn)) {
-        if (_hasSlotPassed(
-          isToday: isToday,
-          now: now,
-          eventDate: eventCompareDate,
-          slotTime: morningInTime,
-          fallbackTime: startTime,
-          defaultHour: 12,
-          defaultMinute: 0,
-        )) {
-          missingSlots.add('Morning Check-in');
+      if (morningInReq) {
+        if (attendee == null || !attendee.morningIn) {
+          if (_hasSlotPassed(
+            isToday: isToday,
+            now: now,
+            eventDate: eventCompareDate,
+            slotTime: morningInTime,
+            fallbackTime: startTime,
+            defaultHour: 12,
+            defaultMinute: 0,
+          )) {
+            missingSlots.add('Morning Check-in');
+          }
+        } else if (isCompulsory && !isRated) {
+          missingSlots.add('Morning Check-in (Pending Rating)');
         }
       }
-      if (morningOutReq && (attendee == null || !attendee.morningOut)) {
-        if (_hasSlotPassed(
-          isToday: isToday,
-          now: now,
-          eventDate: eventCompareDate,
-          slotTime: morningOutTime,
-          fallbackTime: startTime,
-          defaultHour: 12,
-          defaultMinute: 0,
-        )) {
-          missingSlots.add('Morning Check-out');
+
+      if (morningOutReq) {
+        if (attendee == null || !attendee.morningOut) {
+          if (_hasSlotPassed(
+            isToday: isToday,
+            now: now,
+            eventDate: eventCompareDate,
+            slotTime: morningOutTime,
+            fallbackTime: startTime,
+            defaultHour: 12,
+            defaultMinute: 0,
+          )) {
+            missingSlots.add('Morning Check-out');
+          }
+        } else if (isCompulsory && !isRated) {
+          missingSlots.add('Morning Check-out (Pending Rating)');
         }
       }
-      if (afternoonInReq && (attendee == null || !attendee.afternoonIn)) {
-        if (_hasSlotPassed(
-          isToday: isToday,
-          now: now,
-          eventDate: eventCompareDate,
-          slotTime: afternoonInTime,
-          fallbackTime: startTime,
-          defaultHour: 13,
-          defaultMinute: 0,
-        )) {
-          missingSlots.add('Afternoon Check-in');
+
+      if (afternoonInReq) {
+        if (attendee == null || !attendee.afternoonIn) {
+          if (_hasSlotPassed(
+            isToday: isToday,
+            now: now,
+            eventDate: eventCompareDate,
+            slotTime: afternoonInTime,
+            fallbackTime: startTime,
+            defaultHour: 13,
+            defaultMinute: 0,
+          )) {
+            missingSlots.add('Afternoon Check-in');
+          }
+        } else if (isCompulsory && !isRated) {
+          missingSlots.add('Afternoon Check-in (Pending Rating)');
         }
       }
-      if (afternoonOutReq && (attendee == null || !attendee.afternoonOut)) {
-        if (_hasSlotPassed(
-          isToday: isToday,
-          now: now,
-          eventDate: eventCompareDate,
-          slotTime: afternoonOutTime,
-          fallbackTime: endTime,
-          defaultHour: 17,
-          defaultMinute: 0,
-        )) {
-          missingSlots.add('Afternoon Check-out');
+
+      if (afternoonOutReq) {
+        if (attendee == null || !attendee.afternoonOut) {
+          if (_hasSlotPassed(
+            isToday: isToday,
+            now: now,
+            eventDate: eventCompareDate,
+            slotTime: afternoonOutTime,
+            fallbackTime: endTime,
+            defaultHour: 17,
+            defaultMinute: 0,
+          )) {
+            missingSlots.add('Afternoon Check-out');
+          }
+        } else if (isCompulsory && !isRated) {
+          missingSlots.add('Afternoon Check-out (Pending Rating)');
         }
       }
 

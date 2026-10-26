@@ -78,7 +78,7 @@ class RequestInfoEditsScreen extends StatelessWidget {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: const Text(
-                        'In compliance with the Data Privacy Act and under the agreement with the UB National SSG, all student information is kept safely stored under limited access. For changes regarding their personal information, kindly reach out to the UB National SSG Officers and raise the concern, or send a request through the Send Feedback section in the settings page.',
+                        'In compliance with the Data Privacy Act and under the agreement with the UB National SSG, all student information is kept safely stored under limited access. For changes regarding their personal information, kindly reach out to the UB National SSG Officers and raise the concern.',
                         textAlign: TextAlign.justify,
                         style: TextStyle(
                           fontFamily: 'Figtree',

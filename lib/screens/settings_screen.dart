@@ -257,7 +257,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 return null;
                               },
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.lock_outline_rounded,
+                                  size: 15,
+                                  color: AppColors.nocturnalExpedition.withAlpha(160),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Feedback submissions are anonymous. No personal or identifiable account information is attached to your submission.',
+                                    style: TextStyle(
+                                      fontFamily: 'Figtree',
+                                      fontSize: 11.5,
+                                      color: AppColors.nocturnalExpedition.withAlpha(180),
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
                             SizedBox(
                               height: 52,
                               child: ElevatedButton(
@@ -548,14 +571,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       Container(
                                         width: 42,
                                         height: 42,
+                                        padding: const EdgeInsets.all(7),
                                         decoration: BoxDecoration(
-                                          color: AppColors.mysticMint.withAlpha(70),
+                                          color: AppColors.arcticPowder,
                                           borderRadius: BorderRadius.circular(10),
                                         ),
-                                        child: const Icon(
-                                          Icons.support_agent_rounded,
-                                          color: AppColors.oceanicNoir,
-                                          size: 22,
+                                        child: Image.asset(
+                                          'assets/lifeBadge.png',
+                                          fit: BoxFit.contain,
                                         ),
                                       ),
                                       const SizedBox(width: 14),
@@ -574,7 +597,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              'Account help, info updates, & password',
+                                              'Ask for assistance here',
                                               style: TextStyle(
                                                 fontFamily: 'Figtree',
                                                 fontSize: 12,
@@ -630,7 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           borderRadius: BorderRadius.circular(10),
                                         ),
                                         child: const Icon(
-                                          Icons.rate_review_outlined,
+                                          Icons.chat_bubble_outline_rounded,
                                           color: AppColors.oceanicNoir,
                                           size: 20,
                                         ),

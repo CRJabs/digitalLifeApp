@@ -1,20 +1,33 @@
 -- Migration: Gating fines deduction and points award behind event rating and feedback
--- 1. Update record_attendance_scan to set pointsEarned to 0 unless student has completed rating
--- 2. Update trg_fines_on_rating_change to update pointsEarned on attendees upon rating completion
+-- 1. Rename old uuid overload of record_attendance_scan to record_attendance_scan_legacy_uuid to resolve function candidate ambiguity
+-- 2. Update record_attendance_scan with proper uuid casting and rating gating
+-- 3. Update trg_fines_on_rating_change to update pointsEarned on attendees upon rating completion
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_proc 
+        WHERE proname = 'record_attendance_scan' 
+          AND pg_get_function_identity_arguments(oid) LIKE 'p_event_id uuid%'
+    ) THEN
+        ALTER FUNCTION public.record_attendance_scan(uuid, text, text, text, text, text, text, text, text, boolean) 
+        RENAME TO record_attendance_scan_legacy_uuid;
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.record_attendance_scan(
-    p_event_id TEXT,
-    p_scanned_email TEXT,
-    p_scanned_name TEXT,
-    p_field_to_set TEXT,
-    p_is_admin_scan BOOLEAN DEFAULT false,
-    p_scanner_email TEXT DEFAULT NULL,
-    p_phone TEXT DEFAULT '',
-    p_dept TEXT DEFAULT '',
-    p_program TEXT DEFAULT '',
-    p_year TEXT DEFAULT ''
+    p_event_id text,
+    p_scanned_email text,
+    p_scanned_name text,
+    p_field_to_set text,
+    p_is_admin_scan boolean DEFAULT false,
+    p_scanner_email text DEFAULT NULL,
+    p_phone text DEFAULT '',
+    p_dept text DEFAULT '',
+    p_program text DEFAULT '',
+    p_year text DEFAULT ''
 )
-RETURNS JSONB
+RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $function$
@@ -32,7 +45,7 @@ BEGIN
     SELECT id, "providePoints", "pointsAwarded" 
       INTO v_event 
       FROM public.events 
-     WHERE id = p_event_id;
+     WHERE id = p_event_id::uuid;
 
     IF v_event.id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'status', 'error', 'error', 'Event not found');
@@ -46,14 +59,14 @@ BEGIN
     -- 3. Lock attendee row if exists to prevent race conditions
     SELECT * INTO v_attendee
       FROM public.attendees
-     WHERE "eventId" = p_event_id 
+     WHERE "eventId" = p_event_id::uuid 
        AND (lower(student_email) = lower(p_scanned_email) OR lower(email) = lower(p_scanned_email))
      FOR UPDATE;
 
     -- Check if student has already rated this event
     SELECT EXISTS (
         SELECT 1 FROM public.event_ratings 
-         WHERE event_id = p_event_id 
+         WHERE event_id = p_event_id::uuid 
            AND (lower(student_email) = lower(p_scanned_email) OR (v_attendee.name IS NOT NULL AND lower(student_name) = lower(v_attendee.name)))
            AND feedback_text IS NOT NULL AND feedback_text <> ''
     ) INTO v_is_rated;
@@ -105,7 +118,7 @@ BEGIN
             ) RETURNING to_jsonb(attendees.*)',
             p_field_to_set, v_time_field, v_manual_field, v_by_field
         ) USING 
-            p_scanned_name, lower(p_scanned_email), p_phone, p_dept, p_program, p_year, p_event_id,
+            p_scanned_name, lower(p_scanned_email), p_phone, p_dept, p_program, p_year, v_event.id,
             p_is_admin_scan, lower(p_scanner_email), v_points_to_award
         INTO v_result;
 
@@ -116,7 +129,7 @@ EXCEPTION
         -- Safely handle concurrent insert collision
         SELECT * INTO v_attendee
           FROM public.attendees
-         WHERE "eventId" = p_event_id 
+         WHERE "eventId" = p_event_id::uuid 
            AND (lower(student_email) = lower(p_scanned_email) OR lower(email) = lower(p_scanned_email))
          FOR UPDATE;
 

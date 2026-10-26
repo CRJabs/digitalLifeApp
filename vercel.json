@@ -1,5 +1,7 @@
 {
-  "outputDirectory": "build/web",
+  "git": {
+    "deploymentEnabled": false
+  },
   "headers": [
     {
       "source": "/(.*)",

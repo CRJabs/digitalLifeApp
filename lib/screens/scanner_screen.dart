@@ -28,6 +28,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
     setState(() => _isDownloading = true);
 
     try {
+      // Allow frame to render progress spinner before heavy canvas/image encoding
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
       // 1. Generate high-resolution branded pass PNG (with lifeBadge.png logo, QR, and info)
       Uint8List? pngBytes = await QrPassGenerator.generatePassPng(profile);
 
@@ -97,7 +100,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
       debugPrint('QR Download error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Download failed: $e'),
+          content: const Text(
+            'Unable to download QR code. Please check storage permissions and try again.',
+            style: TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w500),
+          ),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

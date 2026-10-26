@@ -26,10 +26,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _loading = false;
 
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   void dispose() {

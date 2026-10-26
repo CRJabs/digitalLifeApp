@@ -49,6 +49,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       HomeScreen(
         onViewQrTap: () => setState(() => _currentIndex = 2),
         onSeeAllTap: () => setState(() => _currentIndex = 3),
+        isActive: _currentIndex == 0,
       ),
       const FinesScreen(),
       const ScannerScreen(),

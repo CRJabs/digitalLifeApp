@@ -109,6 +109,12 @@ class SecurityService {
     await prefs.setInt(_keyCooldownUntil, cooldownUntil);
   }
 
+  /// Get current failed login attempts stored on the device.
+  Future<int> getLoginFailedAttempts() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_keyLoginAttempts) ?? 0;
+  }
+
   /// Check server-side rate limit table via PostgreSQL RPC (0 bcrypt computation).
   /// Returns a map with 'allowed' (bool), 'remaining_seconds' (int), and 'message' (String).
   Future<Map<String, dynamic>> checkServerRateLimit(String email) async {
@@ -125,7 +131,15 @@ class SecurityService {
       }
       return {'allowed': true};
     } catch (_) {
-      // If server RPC is unreachable, gracefully fall back to local device rate limit
+      // If server RPC is unreachable, check local failed attempts to fail closed on repeated failures
+      final attempts = await getLoginFailedAttempts();
+      if (attempts >= 3) {
+        return {
+          'allowed': false,
+          'remaining_seconds': 30,
+          'message': 'Security check temporarily unavailable. Please retry in 30 seconds.',
+        };
+      }
       return {'allowed': true};
     }
   }

@@ -10,7 +10,12 @@ import '../core/user_profile_service.dart';
 /// Shows a welcome header, the "View QR Code" action card, and a
 /// Recent Activity list sourced from live Supabase attendee updates.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.onViewQrTap, this.onSeeAllTap});
+  const HomeScreen({
+    super.key,
+    this.onViewQrTap,
+    this.onSeeAllTap,
+    this.isActive = true,
+  });
 
   /// Called when the user taps the "View QR Code" card; used by [MainShell]
   /// to switch to the Scanner tab.
@@ -18,6 +23,9 @@ class HomeScreen extends StatefulWidget {
 
   /// Called when the user taps "See all" on Recent Activity.
   final VoidCallback? onSeeAllTap;
+
+  /// True when the Home tab is the active tab in MainShell.
+  final bool isActive;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -72,8 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   RealtimeChannel? _carouselChannel;
 
-  RealtimeChannel? _eventsChannel;
-
   @override
   void initState() {
     super.initState();
@@ -82,15 +88,28 @@ class _HomeScreenState extends State<HomeScreen> {
     _carouselController = PageController(initialPage: 0);
     _fetchCarouselItems();
     _subscribeToCarousel();
-    _subscribeToEvents();
-    _startCarouselTimer();
+    if (widget.isActive) {
+      _startCarouselTimer();
+    }
     _fetchTodaysEvents();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      if (widget.isActive) {
+        _startCarouselTimer();
+      } else {
+        _carouselTimer?.cancel();
+        _carouselTimer = null;
+      }
+    }
   }
 
   @override
   void dispose() {
     _carouselChannel?.unsubscribe();
-    _eventsChannel?.unsubscribe();
     _carouselTimer?.cancel();
     _carouselController.dispose();
     _dualCardController.dispose();
@@ -112,19 +131,10 @@ class _HomeScreenState extends State<HomeScreen> {
         .subscribe();
   }
 
-  void _subscribeToEvents() {
-    _eventsChannel = Supabase.instance.client
-        .channel('events:all')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'events',
-          callback: (_) => _fetchTodaysEvents(),
-        )
-        .subscribe();
+  void _onAttendeeUpdate() {
+    _fetchTodaysEvents();
+    if (mounted) setState(() {});
   }
-
-  void _onAttendeeUpdate() => setState(() {});
   void _onProfileUpdate() => setState(() {});
 
   Future<void> _fetchCarouselItems() async {

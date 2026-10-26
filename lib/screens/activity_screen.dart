@@ -103,14 +103,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
   bool _isLoading = true;
   String? _error;
 
-  RealtimeChannel? _eventsChannel;
-
   @override
   void initState() {
     super.initState();
     _fetchEvents();
-    _subscribeToEvents();
-    // Rebuild when attendee check-in state changes
+    // Rebuild and refresh when attendee check-in or events change via central AttendeeService
     AttendeeService().addListener(_onAttendeeUpdate);
   }
 
@@ -133,25 +130,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   @override
   void dispose() {
-    _eventsChannel?.unsubscribe();
     AttendeeService().removeListener(_onAttendeeUpdate);
     super.dispose();
   }
 
-  void _onAttendeeUpdate() => setState(() {});
-
-  // ── Realtime events subscription ──────────────────────────────────────────
-
-  void _subscribeToEvents() {
-    _eventsChannel = Supabase.instance.client
-        .channel('events:all')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'events',
-          callback: (_) => _fetchEvents(),
-        )
-        .subscribe();
+  void _onAttendeeUpdate() {
+    _fetchEvents();
   }
 
   // ── Data fetching ─────────────────────────────────────────────────────────

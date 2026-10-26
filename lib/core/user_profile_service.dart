@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'attendee_service.dart';
-import 'notification_service.dart';
 
 /// Singleton profile service that extends ChangeNotifier to make user data
 /// updates reactive.
@@ -25,7 +24,6 @@ class UserProfileService extends ChangeNotifier {
   String yearLevel = '';
 
   Timer? _rotationTimer;
-  DateTime? _lastNotifiedDate;
 
   Future<void> _loadLocal(String uid) async {
     try {
@@ -207,19 +205,7 @@ class UserProfileService extends ChangeNotifier {
   /// to update the QR code.
   void startDailyRotation() {
     _rotationTimer?.cancel();
-    _rotationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      final now = DateTime.now();
-      // Only notify if the day has actually changed
-      if (_lastNotifiedDate != null &&
-          (_lastNotifiedDate!.day != now.day ||
-           _lastNotifiedDate!.month != now.month ||
-           _lastNotifiedDate!.year != now.year)) {
-        NotificationService.showLocalNotification(
-          'QR Code Updated 🔄',
-          'Your attendance QR code has been refreshed for today.',
-        );
-      }
-      _lastNotifiedDate = now;
+    _rotationTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       notifyListeners();
     });
   }

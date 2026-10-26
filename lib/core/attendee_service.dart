@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'notification_service.dart';
 
 /// Represents a single row in the `attendees` table.
 class AttendeeRecord {
@@ -115,6 +114,8 @@ class AttendeeService extends ChangeNotifier {
   DateTime? _lastCheckedDay;
   String? _currentEmail;
   List<dynamic> _cachedEvents = [];
+  StreamSubscription<AuthState>? _authSub;
+  List<MissingCheckInfo>? _cachedMissingChecks;
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -124,6 +125,19 @@ class AttendeeService extends ChangeNotifier {
     if (email.isEmpty) return;
     if (_currentEmail == email) return; // already listening
     _currentEmail = email;
+    _cachedMissingChecks = null;
+
+    // Listen for auth state transitions to resubscribe or clear automatically
+    _authSub ??= Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final session = data.session;
+      if (data.event == AuthChangeEvent.signedOut) {
+        stopListening();
+      } else if (session?.user.email != null &&
+          session!.user.email!.isNotEmpty &&
+          session.user.email != _currentEmail) {
+        startListening(session.user.email!);
+      }
+    });
 
     // Load initial records
     await _fetchAll(email);
@@ -174,6 +188,7 @@ class AttendeeService extends ChangeNotifier {
           table: 'events',
           callback: (_) async {
             dev.log('AttendeeService — events changed, refetching and recalculating dues');
+            _cachedMissingChecks = null;
             await _fetchCachedEvents();
             await refreshDues();
           },
@@ -197,6 +212,9 @@ class AttendeeService extends ChangeNotifier {
     _dayCheckTimer = null;
     _lastCheckedDay = null;
     _currentEmail = null;
+    _authSub?.cancel();
+    _authSub = null;
+    _cachedMissingChecks = null;
     attendeesByEvent.clear();
     recentActivity.clear();
     _cachedEvents.clear();
@@ -292,13 +310,14 @@ class AttendeeService extends ChangeNotifier {
   void _startDayCheckTimer() {
     _dayCheckTimer?.cancel();
     _lastCheckedDay = DateTime.now();
-    _dayCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _dayCheckTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       final now = DateTime.now();
       if (_lastCheckedDay == null ||
           _lastCheckedDay!.year != now.year ||
           _lastCheckedDay!.month != now.month ||
           _lastCheckedDay!.day != now.day) {
         _lastCheckedDay = now;
+        _cachedMissingChecks = null;
         dev.log('AttendeeService — calendar day changed, recalculating dues');
         refreshDues();
       } else {
@@ -334,13 +353,6 @@ class AttendeeService extends ChangeNotifier {
         // Ensure server view doesn't exceed accurate client dues for today/past events
         final localDues = getMissingChecks().fold(0.0, (sum, item) => sum + item.totalFine);
         final syncedDues = viewDues > localDues ? localDues : viewDues;
-        if (syncedDues > outstandingDues) {
-          final diff = syncedDues - outstandingDues;
-          NotificationService.showLocalNotification(
-            'New Fine Added 🔴',
-            'A fine of ₱${diff.toStringAsFixed(2)} has been added to your account.',
-          );
-        }
         outstandingDues = syncedDues;
         dev.log('AttendeeService — refreshDues: updated outstandingDues to ₱$outstandingDues');
         notifyListeners();
@@ -397,7 +409,10 @@ class AttendeeService extends ChangeNotifier {
   /// Compiles details of all missing checks for events that are today or in the past.
   /// For events occurring today, checks are only marked as missed if their scheduled
   /// cutoff time has actually passed.
-  List<MissingCheckInfo> getMissingChecks() {
+  List<MissingCheckInfo> getMissingChecks({bool forceRefresh = false}) {
+    if (!forceRefresh && _cachedMissingChecks != null) {
+      return _cachedMissingChecks!;
+    }
     final list = <MissingCheckInfo>[];
     final now = DateTime.now();
     final todayDate = DateTime(now.year, now.month, now.day);
@@ -524,17 +539,21 @@ class AttendeeService extends ChangeNotifier {
         }
         final pointsAwarded = parsePoints(eventJson['pointsAwarded']);
 
+        // Only count actual missed check-ins for the monetary fine; do NOT fine for attended events pending rating
+        final actualMissedCount = missingSlots.where((s) => !s.contains('Pending Rating')).length;
+
         list.add(MissingCheckInfo(
           eventName: eventName,
           date: eventDateStr,
           missingSlots: missingSlots,
-          totalFine: isCompulsory ? (missingSlots.length * 50.0) : 0.0,
+          totalFine: isCompulsory ? (actualMissedCount * 50.0) : 0.0,
           isCompulsory: isCompulsory,
           providePoints: providePoints,
           pointsAwarded: pointsAwarded,
         ));
       }
     }
+    _cachedMissingChecks = list;
     return list;
   }
 
@@ -544,7 +563,7 @@ class AttendeeService extends ChangeNotifier {
     try {
       final data = await Supabase.instance.client
           .from('attendees')
-          .select()
+          .select('id, eventId, name, morningIn, morningOut, afternoonIn, afternoonOut, created_at, student_email')
           .ilike('student_email', email);
 
       final records = (data as List<dynamic>)
@@ -557,6 +576,7 @@ class AttendeeService extends ChangeNotifier {
           attendeesByEvent[r.eventId] = r;
         }
       }
+      _cachedMissingChecks = null;
       notifyListeners();
     } catch (e) {
       dev.log('AttendeeService — fetchAll error: $e');
@@ -568,9 +588,10 @@ class AttendeeService extends ChangeNotifier {
     try {
       final eventsData = await Supabase.instance.client
           .from('events')
-          .select()
+          .select('id, eventName, date, morningIn, morningOut, afternoonIn, afternoonOut, isCompulsory, isVoid, providePoints, pointsAwarded, morningInTime, morningOutTime, afternoonInTime, afternoonOutTime')
           .order('created_at', ascending: false);
       _cachedEvents = eventsData as List<dynamic>;
+      _cachedMissingChecks = null;
     } catch (e) {
       dev.log('AttendeeService — _fetchCachedEvents error: $e');
     }
@@ -585,12 +606,6 @@ class AttendeeService extends ChangeNotifier {
           .eq('is_active', true)
           .maybeSingle();
       final newNotice = row?['content'] as String? ?? '';
-      if (newNotice.isNotEmpty && newNotice != studentNotice) {
-        NotificationService.showLocalNotification(
-          'New Notice from Admin 📋',
-          newNotice.length > 80 ? '${newNotice.substring(0, 80)}...' : newNotice,
-        );
-      }
       studentNotice = newNotice;
       notifyListeners();
     } catch (e) {
@@ -606,16 +621,24 @@ class AttendeeService extends ChangeNotifier {
       final record = AttendeeRecord.fromJson(newRow);
       if (record.eventId.isEmpty) return;
 
-      // Fetch event name for the activity label
+      // Fetch event name from cache first, avoiding N+1 DB query
       String eventName = 'Unknown Event';
       try {
-        final eventData = await Supabase.instance.client
-            .from('events')
-            .select('eventName')
-            .eq('id', record.eventId)
-            .maybeSingle();
-        if (eventData != null) {
-          eventName = eventData['eventName'] as String? ?? 'Unknown Event';
+        final cached = _cachedEvents.firstWhere(
+          (e) => (e['id'] as String?) == record.eventId,
+          orElse: () => null,
+        );
+        if (cached != null) {
+          eventName = cached['eventName'] as String? ?? 'Unknown Event';
+        } else {
+          final eventData = await Supabase.instance.client
+              .from('events')
+              .select('eventName')
+              .eq('id', record.eventId)
+              .maybeSingle();
+          if (eventData != null) {
+            eventName = eventData['eventName'] as String? ?? 'Unknown Event';
+          }
         }
       } catch (_) {}
 
@@ -629,10 +652,6 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Morning Attendance Checked In',
           timestamp: DateTime.now(),
         ));
-        NotificationService.showLocalNotification(
-          'Morning Check-in Confirmed ✅',
-          'Your morning check-in for $eventName has been recorded.',
-        );
       }
       if (_didFlipTrue(previous?.morningOut, record.morningOut)) {
         newItems.add(RecentActivityItem(
@@ -640,10 +659,6 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Morning Attendance Checked Out',
           timestamp: DateTime.now(),
         ));
-        NotificationService.showLocalNotification(
-          'Morning Check-out Confirmed ✅',
-          'Your morning check-out for $eventName has been recorded.',
-        );
       }
       if (_didFlipTrue(previous?.afternoonIn, record.afternoonIn)) {
         newItems.add(RecentActivityItem(
@@ -651,10 +666,6 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Afternoon Attendance Checked In',
           timestamp: DateTime.now(),
         ));
-        NotificationService.showLocalNotification(
-          'Afternoon Check-in Confirmed ✅',
-          'Your afternoon check-in for $eventName has been recorded.',
-        );
       }
       if (_didFlipTrue(previous?.afternoonOut, record.afternoonOut)) {
         newItems.add(RecentActivityItem(
@@ -662,14 +673,11 @@ class AttendeeService extends ChangeNotifier {
           detail: 'Afternoon Attendance Checked Out',
           timestamp: DateTime.now(),
         ));
-        NotificationService.showLocalNotification(
-          'Afternoon Check-out Confirmed ✅',
-          'Your afternoon check-out for $eventName has been recorded.',
-        );
       }
 
       // Update stored record
       attendeesByEvent[record.eventId] = record;
+      _cachedMissingChecks = null;
 
       // Prepend new activity items
       for (final item in newItems.reversed) {

@@ -12,10 +12,11 @@ class QrPassGenerator {
   /// - QR code
   /// - Student Name
   /// - Department, Program & Year Level
+  /// - University of Baguio LiFe Pass footer
   static Future<Uint8List?> generatePassPng(UserProfileService profile) async {
     try {
       const double width = 720;
-      const double height = 820;
+      const double height = 840;
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, width, height));
 
@@ -138,9 +139,7 @@ class QrPassGenerator {
       final double deptTop = nameTop + namePainter.height + 10;
       deptPainter.paint(canvas, Offset(deptLeft, deptTop));
 
-
-
-      // 8. Convert to PNG bytes
+      // 7. Convert to PNG bytes
       final picture = recorder.endRecording();
       final img = await picture.toImage(width.toInt(), height.toInt());
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);

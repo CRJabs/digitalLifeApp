@@ -16,7 +16,7 @@ class QrPassGenerator {
   static Future<Uint8List?> generatePassPng(UserProfileService profile) async {
     try {
       const double width = 720;
-      const double height = 840;
+      const double height = 860;
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, width, height));
 
@@ -139,7 +139,35 @@ class QrPassGenerator {
       final double deptTop = nameTop + namePainter.height + 10;
       deptPainter.paint(canvas, Offset(deptLeft, deptTop));
 
-      // 7. Convert to PNG bytes
+      // 7. Validity date notice
+      final now = DateTime.now();
+      const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      final dateToday = '${months[now.month - 1]} ${now.day}, ${now.year}';
+      final noticeText = 'Valid for today: $dateToday only';
+
+      final noticePainter = TextPainter(
+        text: TextSpan(
+          text: noticeText,
+          style: TextStyle(
+            fontFamily: 'Figtree',
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: AppColors.nocturnalExpedition.withAlpha(180),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: width - 80);
+
+      final double noticeLeft = (width - noticePainter.width) / 2;
+      final double noticeTop = deptTop + deptPainter.height + 16;
+      noticePainter.paint(canvas, Offset(noticeLeft, noticeTop));
+
+      // 8. Convert to PNG bytes
       final picture = recorder.endRecording();
       final img = await picture.toImage(width.toInt(), height.toInt());
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);

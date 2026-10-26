@@ -568,14 +568,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Container(
-                                        width: 42,
-                                        height: 42,
-                                        padding: const EdgeInsets.all(7),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.arcticPowder,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
+                                      SizedBox(
+                                        width: 30,
+                                        height: 30,
                                         child: Image.asset(
                                           'assets/lifeBadge.png',
                                           fit: BoxFit.contain,
@@ -645,17 +640,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Container(
-                                        width: 42,
-                                        height: 42,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.arcticPowder,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: const Icon(
-                                          Icons.chat_bubble_outline_rounded,
-                                          color: AppColors.oceanicNoir,
-                                          size: 20,
+                                      const SizedBox(
+                                        width: 30,
+                                        height: 30,
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.chat_bubble_outline_rounded,
+                                            color: AppColors.oceanicNoir,
+                                            size: 22,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 14),

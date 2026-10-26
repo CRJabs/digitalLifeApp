@@ -5,6 +5,7 @@ import '../core/app_text_styles.dart';
 import '../core/session_service.dart';
 import '../core/user_profile_service.dart';
 import 'login_screen.dart';
+import 'life_support_hub_screen.dart';
 
 /// Settings / User Profile screen (tab 3).
 /// Shows the user's profile info with an "Edit Information" toggle that
@@ -491,39 +492,212 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           ),
                         ),
-                      // Edit Information button removed as requested
-
-                      // ── Send Feedback button ────────────────────────────
-                      SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: _showFeedbackModal,
-                          child: const Text('Send Feedback'),
+                      // ── Support & Assistance Card ─────────────────────────
+                      Text(
+                        'Support & Assistance',
+                        style: AppTextStyles.activityTitle.copyWith(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.oceanicNoir,
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
+
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppColors.mysticMint.withAlpha(140),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(10),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // ── LIFE Support Tile ──────────────────────────
+                            Material(
+                              color: Colors.transparent,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(14),
+                              ),
+                              child: InkWell(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(14),
+                                ),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const LifeSupportHubScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.mysticMint.withAlpha(70),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: const Icon(
+                                          Icons.support_agent_rounded,
+                                          color: AppColors.oceanicNoir,
+                                          size: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'LIFE Support',
+                                              style: TextStyle(
+                                                fontFamily: 'Figtree',
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.oceanicNoir,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Account help, info updates, & password',
+                                              style: TextStyle(
+                                                fontFamily: 'Figtree',
+                                                fontSize: 12,
+                                                color: AppColors.nocturnalExpedition.withAlpha(180),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: AppColors.nocturnalExpedition.withAlpha(140),
+                                        size: 22,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // ── Divider ────────────────────────────────────
+                            Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: AppColors.mysticMint.withAlpha(100),
+                              indent: 16,
+                              endIndent: 16,
+                            ),
+
+                            // ── Send Feedback Tile ─────────────────────────
+                            Material(
+                              color: Colors.transparent,
+                              borderRadius: const BorderRadius.vertical(
+                                bottom: Radius.circular(14),
+                              ),
+                              child: InkWell(
+                                borderRadius: const BorderRadius.vertical(
+                                  bottom: Radius.circular(14),
+                                ),
+                                onTap: _showFeedbackModal,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.arcticPowder,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: const Icon(
+                                          Icons.rate_review_outlined,
+                                          color: AppColors.oceanicNoir,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Send Feedback',
+                                              style: TextStyle(
+                                                fontFamily: 'Figtree',
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.oceanicNoir,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Share suggestions or report issues',
+                                              style: TextStyle(
+                                                fontFamily: 'Figtree',
+                                                fontSize: 12,
+                                                color: AppColors.nocturnalExpedition.withAlpha(180),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: AppColors.nocturnalExpedition.withAlpha(140),
+                                        size: 22,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
 
                       // ── Sign Out button (always visible) ──────────────────
                       SizedBox(
-                        height: 52,
-                        child: OutlinedButton(
+                        height: 50,
+                        child: OutlinedButton.icon(
                           onPressed: _signOut,
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                              color: Colors.red,
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text(
+                          icon: const Icon(Icons.logout_rounded, size: 18, color: Colors.red),
+                          label: const Text(
                             'Sign Out',
                             style: TextStyle(
                               fontFamily: 'Figtree',
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: Colors.red,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                              color: Colors.red,
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                         ),

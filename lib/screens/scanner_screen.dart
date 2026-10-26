@@ -1,14 +1,114 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../core/app_colors.dart';
+import '../core/file_downloader/file_downloader.dart';
+import '../core/qr_pass_generator.dart';
 import '../core/user_profile_service.dart';
 
-/// Scanner / QR tab (tab 1).
-/// Shows the LiFe logo at the top, the user's own QR code centered on screen,
-/// and the user's student information below.
-/// The full background uses the splash gradient.
-class ScannerScreen extends StatelessWidget {
+/// Scanner / QR tab (tab 2).
+/// Shows the LiFe white logo at the top, a single unified white card containing
+/// the QR code and student information, a standalone "Download QR Code" button,
+/// and the updated daily reset notice below.
+class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
+
+  @override
+  State<ScannerScreen> createState() => _ScannerScreenState();
+}
+
+class _ScannerScreenState extends State<ScannerScreen> {
+  final GlobalKey _cardKey = GlobalKey();
+  bool _isDownloading = false;
+
+  Future<void> _downloadQr(UserProfileService profile) async {
+    if (_isDownloading) return;
+    setState(() => _isDownloading = true);
+
+    try {
+      // 1. Generate high-resolution branded pass PNG (with lifeBadge.png logo, QR, and info)
+      Uint8List? pngBytes = await QrPassGenerator.generatePassPng(profile);
+
+      // 2. Fallback to capturing on-screen card if generator returns null
+      if (pngBytes == null) {
+        final boundary = _cardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+        if (boundary != null) {
+          final image = await boundary.toImage(pixelRatio: 3.0);
+          final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+          pngBytes = byteData?.buffer.asUint8List();
+        }
+      }
+
+      if (pngBytes == null) {
+        throw Exception('Could not render QR code image.');
+      }
+
+      // 3. Save / Download file
+      final safeName = profile.name.isNotEmpty
+          ? profile.name.replaceAll(RegExp(r'[^\w\-]'), '_')
+          : (profile.email.isNotEmpty ? profile.email.split('@').first : 'pass');
+      final fileName = 'LIFE_QR_$safeName.png';
+
+      final success = await FileDownloader.saveImage(
+        bytes: pngBytes,
+        fileName: fileName,
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'QR Code downloaded successfully!',
+                    style: TextStyle(
+                      fontFamily: 'Figtree',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF1B8755),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Unable to save QR code to this device.'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('QR Download error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Download failed: $e'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,103 +150,171 @@ class ScannerScreen extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
+                                // ── Unified White Card (QR Code + User Info) ─
+                                RepaintBoundary(
+                                  key: _cardKey,
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(24),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha(35),
+                                          blurRadius: 24,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        // QR Code
+                                        LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final qrSize = constraints.maxWidth;
+                                            return QrImageView(
+                                              data: profile.toQrData(),
+                                              version: QrVersions.auto,
+                                              size: qrSize,
+                                              backgroundColor: Colors.white,
+                                              padding: EdgeInsets.zero,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 18),
 
-                        // ── QR Code card ──────────────────────────────────
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            // QR fills card inner width: available width minus card padding (24 each side)
-                            final qrSize = constraints.maxWidth - 48;
-                            return Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withAlpha(30),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 6),
+                                        // Subtle Divider
+                                        Divider(
+                                          height: 1,
+                                          thickness: 1,
+                                          color: AppColors.mysticMint.withAlpha(120),
+                                        ),
+                                        const SizedBox(height: 16),
+
+                                        // Student Name
+                                        Text(
+                                          profile.name.isNotEmpty
+                                              ? profile.name
+                                              : 'UB Student',
+                                          style: const TextStyle(
+                                            fontFamily: 'Figtree',
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.oceanicNoir,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 4),
+
+                                        // Department | Program - Year Level
+                                        Text(
+                                          '${profile.department}  |  ${profile.program} - ${profile.yearLevel}',
+                                          style: TextStyle(
+                                            fontFamily: 'Figtree',
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w500,
+                                            color: AppColors.nocturnalExpedition.withAlpha(200),
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ],
-                              ),
-                              child: QrImageView(
-                                data: profile.toQrData(),
-                                version: QrVersions.auto,
-                                size: qrSize,
-                                backgroundColor: Colors.white,
-                                padding: EdgeInsets.zero,
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 24),
+                                ),
+                                const SizedBox(height: 20),
 
-                        // ── Student Info Card ─────────────────────────────
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 18,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.oceanicNoir.withAlpha(120),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withAlpha(60),
-                              width: 1.2,
+                                // ── Download QR Code Button (Option 2: Glassmorphism Outlined Pill) ──
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 50,
+                                  child: OutlinedButton(
+                                    onPressed: _isDownloading
+                                        ? null
+                                        : () => _downloadQr(profile),
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: Colors.white.withAlpha(35),
+                                      foregroundColor: Colors.white,
+                                      side: const BorderSide(
+                                        color: Colors.white,
+                                        width: 1.5,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: _isDownloading
+                                        ? const Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                              SizedBox(width: 10),
+                                              Text(
+                                                'Preparing QR Code...',
+                                                style: TextStyle(
+                                                  fontFamily: 'Figtree',
+                                                  fontSize: 14.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : const Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.download_rounded,
+                                                size: 20,
+                                                color: Colors.white,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Download QR Code',
+                                                style: TextStyle(
+                                                  fontFamily: 'Figtree',
+                                                  fontSize: 14.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // ── Updated Notice text ───────────────────────────
+                                Text(
+                                  'Your generated QR Code is valid for one day and will reset at midnight.',
+                                  style: TextStyle(
+                                    fontFamily: 'Figtree',
+                                    fontSize: 12,
+                                    color: Colors.white.withAlpha(190),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+
+                                // Bottom padding to account for floating navbar
+                                SizedBox(height: 104.0 + MediaQuery.of(context).padding.bottom),
+                              ],
                             ),
                           ),
-                          child: Column(
-                            children: [
-                              Text(
-                                profile.name,
-                                style: const TextStyle(
-                                  fontFamily: 'Figtree',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '${profile.department}  |  ${profile.program} - ${profile.yearLevel}',
-                                style: TextStyle(
-                                  fontFamily: 'Figtree',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white.withAlpha(200),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
                         ),
-                        const SizedBox(height: 16),
-
-                        // ── Notice text ───────────────────────────────────
-                        Text(
-                          'Note: Your QR code is valid today only and resets at midnight.',
-                          style: TextStyle(
-                            fontFamily: 'Figtree',
-                            fontSize: 12,
-                            color: Colors.white.withAlpha(180),
-                            fontStyle: FontStyle.italic,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-
-                        // Bottom padding to account for floating navbar
-                          SizedBox(height: 104.0 + MediaQuery.of(context).padding.bottom),
-                          ],         // end Column children
-                            ),       // end Column
-                          ),         // end Center
-                        ),           // end ConstrainedBox
-                      );             // end SingleChildScrollView / return
+                      );
                     },
-                  ),                 // end LayoutBuilder
-                ),                   // end Expanded
+                  ),
+                ),
               ],
             );
           },
